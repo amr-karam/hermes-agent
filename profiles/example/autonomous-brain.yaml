@@ -1,0 +1,17 @@
+name: autonomous-brain
+# Example profile that loads the autonomous-brain skill suite
+# Copy to profiles/default/config.yaml to make it your default, or
+# switch with: hermes profile switch autonomous-brain
+skills:
+  - using-agent-skills          # auto‑routes any goal to the right skill
+  - auto-profile                # switches persona based on cwd (Honcho fact)
+  - project-watchdog            # background QA + auto‑fix via agent-self-reflection
+  - hermes-strategist           # proactively suggests next 3 goals
+  - agent-self-reflection       # root‑cause analysis & self‑heal on failure
+# Optional: you may also want to enable high autonomy and remote Honcho:
+# (these are normally set in the global config.yaml, but can be overridden here)
+# config:
+#   autonomy.mode: high
+#   autonomy.auto_reflect: true
+#   memory.backend: remote
+#   memory.sync_interval: 60

@@ -1,6 +1,6 @@
 ---
 name: project-watchdog
-description: "Background lint/typecheck/test loop that auto-fixes failures."
+description: "Run lint/typecheck/test on a timer, auto-fix failures."
 version: 1.0.0
 author: amr-karam (https://github.com/amr-karam) - Hermes Agent
 license: MIT
@@ -8,7 +8,7 @@ platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [ci, qa, lint, typecheck, test, self-heal, watchdog, devops]
-    related_skills: [agent-self-reflection, using-agent-skills, auto-profile]
+    related_skills: [auto-profile, project-watchdog, hermes-strategist]
     config:
       interval_seconds: 600
       npm_scripts: [lint, typecheck, test]

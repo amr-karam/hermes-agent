@@ -1,6 +1,6 @@
 ---
 name: hermes-strategist
-description: "Suggest the next three goals with a recommended skill, hourly."
+description: "Suggest the next three goals, hourly, with a skill."
 version: 1.0.0
 author: amr-karam (https://github.com/amr-karam) - Hermes Agent
 license: MIT
@@ -8,7 +8,7 @@ platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [strategy, planning, goals, suggestions, autonomous, devops]
-    related_skills: [using-agent-skills, project-watchdog, auto-profile]
+    related_skills: [auto-profile, project-watchdog, hermes-strategist]
     config:
       interval_seconds: 3600
       project_status_files: [PROJECT_STATUS.md, ROADMAP.md, TECH_DEBT.md]

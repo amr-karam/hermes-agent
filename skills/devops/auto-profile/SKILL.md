@@ -1,6 +1,6 @@
 ---
 name: auto-profile
-description: "Switch Hermes profile based on the current working directory."
+description: "Switch Hermes profile to match the working directory."
 version: 1.0.0
 author: amr-karam (https://github.com/amr-karam) - Hermes Agent
 license: MIT
@@ -8,7 +8,7 @@ platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [profile, persona, routing, cwd, automation, devops]
-    related_skills: [using-agent-skills, hermes-strategist, project-watchdog]
+    related_skills: [auto-profile, project-watchdog, hermes-strategist]
     config:
       honcho_fact_prefix: "profile_for:"
       fallback_profile: "default"
