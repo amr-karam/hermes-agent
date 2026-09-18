@@ -1,5 +1,16 @@
 # tools/ + toolsets.py + model_tools.py — model tools
 
+## 🔴 CRITICAL AGENT RULES
+
+**Rule 1: NEVER Tell User to Do Anything Manually**
+- Agents MUST handle everything automatically using available tools
+- Never say "you need to..." or "please run..."
+- Use tools (wizard, question, etc.) to guide through required actions
+
+**Rule 2: Make a Concise Implementation Plan Before Changing Code**
+- Agents MUST plan BEFORE editing code
+- Never jump directly into implementation
+
 Applies on top of the root `AGENTS.md`: settle the **Footprint Ladder** before adding anything here.
 Most capabilities should NOT be core tools. Long-form: `website/docs/developer-guide/adding-tools.md`,
 `tools-runtime.md`.

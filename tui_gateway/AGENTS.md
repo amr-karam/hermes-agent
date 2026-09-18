@@ -1,5 +1,16 @@
 # tui_gateway/ + ui-tui/ — the TUI and its JSON-RPC backend
 
+## 🔴 CRITICAL AGENT RULES
+
+**Rule 1: NEVER Tell User to Do Anything Manually**
+- Agents MUST handle everything automatically using available tools
+- Never say "you need to..." or "please run..."
+- Use tools (wizard, question, etc.) to guide through required actions
+
+**Rule 2: Make a Concise Implementation Plan Before Changing Code**
+- Agents MUST plan BEFORE editing code
+- Never jump directly into implementation
+
 Applies on top of the root `AGENTS.md`. The TUI fully replaces the classic prompt_toolkit CLI;
 activate with `hermes --tui` or `HERMES_TUI=1`. `tui_gateway` is ALSO the backend the Desktop app
 and the dashboard `/chat` talk to — changes here have three consumers.

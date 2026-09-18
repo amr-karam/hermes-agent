@@ -1,6 +1,15 @@
 # skills/ + optional-skills/ — bundled skills, authoring standards, curator
 
-**CRITICAL RULE: NEVER tell the user to do anything manually.** The agent MUST handle everything automatically using available tools. If a task requires user action (credentials, approvals), the agent must use available tools (wizard, question, etc.) to guide through it — never say "you need to..." or "please run...". The agent IS the automation.
+## 🔴 CRITICAL AGENT RULES
+
+**Rule 1: NEVER Tell User to Do Anything Manually**
+- Agents MUST handle everything automatically using available tools
+- Never say "you need to..." or "please run..."
+- Use tools (wizard, question, etc.) to guide through required actions
+
+**Rule 2: Make a Concise Implementation Plan Before Changing Code**
+- Agents MUST plan BEFORE editing code
+- Never jump directly into implementation
 
 Applies on top of the root `AGENTS.md`. Long-form: `website/docs/developer-guide/creating-skills.md`;
 user docs: `website/docs/user-guide/features/skills.md`, `curator.md`.

@@ -27,6 +27,7 @@ def _install_id_file_lock(root: Path):
     """Serialize identity publication across processes on POSIX and Windows."""
     fd = os.open(root / ".install_id.lock", os.O_RDWR | os.O_CREAT, 0o600)
     windows = os.name == "nt"
+    acquired = False
     try:
         if windows:
             import msvcrt
@@ -40,6 +41,7 @@ def _install_id_file_lock(root: Path):
             while True:
                 try:
                     msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+                    acquired = True
                     break
                 except OSError:
                     if time.monotonic() >= deadline:
@@ -49,14 +51,19 @@ def _install_id_file_lock(root: Path):
         else:
             import fcntl
             fcntl.flock(fd, fcntl.LOCK_EX)
+            acquired = True
         yield
     finally:
         try:
-            if windows:
-                os.lseek(fd, 0, os.SEEK_SET)
-                msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
-            else:
-                fcntl.flock(fd, fcntl.LOCK_UN)
+            # Never unlock a region this fd never acquired: on a timed-out
+            # acquire the finally would otherwise release a sibling holder's
+            # byte-range (Windows locks are process-wide) or mask the timeout.
+            if acquired:
+                if windows:
+                    os.lseek(fd, 0, os.SEEK_SET)
+                    msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+                else:
+                    fcntl.flock(fd, fcntl.LOCK_UN)
         finally:
             os.close(fd)
 

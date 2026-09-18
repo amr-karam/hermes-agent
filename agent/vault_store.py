@@ -21,6 +21,7 @@ import json
 import os
 import re
 import threading
+import time
 import uuid
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass
@@ -53,6 +54,8 @@ REQUIRED_FIELDS = {"payment": ("card_number", "exp_month", "exp_year", "cvc"),
 _DEFAULT_PORTS = {"http": 80, "https": 443}
 
 _LOCK = threading.Lock()
+_LOCK_TIMEOUT_SECONDS = 10.0
+_LOCK_POLL_SECONDS = 0.05
 
 # fcntl is Unix-only; Windows locks a byte range with msvcrt (same shape as tools/skill_usage.py).
 msvcrt = None
@@ -232,8 +235,19 @@ class VaultStore:
                 if fcntl:
                     fcntl.flock(fd, fcntl.LOCK_EX)
                 elif msvcrt:
+                    # Blocking LK_LOCK raises OSError(Errno 36, EDEADLK) on
+                    # same-process re-entry; poll LK_NBLCK to a deadline instead.
                     fd.seek(0)
-                    msvcrt.locking(fd.fileno(), msvcrt.LK_LOCK, 1)
+                    deadline = time.monotonic() + _LOCK_TIMEOUT_SECONDS
+                    while True:
+                        try:
+                            msvcrt.locking(fd.fileno(), msvcrt.LK_NBLCK, 1)
+                            break
+                        except OSError:
+                            if time.monotonic() >= deadline:
+                                raise
+                            time.sleep(_LOCK_POLL_SECONDS)
+                            fd.seek(0)
                 try:
                     yield
                 finally:
