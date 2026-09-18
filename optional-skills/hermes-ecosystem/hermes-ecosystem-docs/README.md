@@ -6,7 +6,7 @@ This document provides a comprehensive overview of the Hermes Agent Desktop skil
 
 ---
 
-## 📊 Complete Skill Catalog (14 Skills)
+## 📊 Complete Skill Catalog (15 Skills)
 
 | # | Skill Name | Category | Status | Key Features |
 |---|------------|----------|--------|--------------|
