@@ -114,7 +114,7 @@ fields; callers may initialize a provider without an agent or a session database
 | `gateway_session_key` | Stable messaging-chat identity for per-chat session isolation. |
 | `user_id`, `user_id_alt`, `user_name`, `chat_id` | Gateway identity fields, included when present. |
 | `agent_identity` | Active profile name, when available. |
-| `agent_workspace`, `agent_context` | Runtime agent scope (`hermes` and `primary` for the main agent). |
+| `agent_workspace`, `agent_context` | Runtime agent scope. `agent_workspace` is `hermes`; `agent_context` is `cron` for scheduler runs, `subagent` for `delegate_task` children, else `primary` — skip automatic writes for the non-primary values. |
 
 Do not assume `os.getcwd()` identifies the conversation's workspace: one Desktop
 or gateway backend can serve several sessions. If `cwd` is absent and directory
@@ -211,6 +211,12 @@ an active provider advertising the API completed its checkpoint: the
 uncompressed transcript is preserved, the compaction attempt errors with
 `BLOCKED_MISSING_PREREQUISITE`, and it can be retried once your store
 recovers. With the gate off (default), nothing changes for existing providers.
+
+None of the providers bundled with Hermes advertise checkpoint API v2 — the
+contract is opt-in and exists for third-party archiving providers. Enabling
+`checkpoint_required` without one therefore blocks every compression attempt
+(manual and automatic): agent init logs a warning naming the active provider,
+and each refusal names `compression.checkpoint_required` as the key to disable.
 
 The gate binds to every compaction authority, not just the Hermes
 summarizer: server-side native compaction (`compression.codex_responses_native`)
