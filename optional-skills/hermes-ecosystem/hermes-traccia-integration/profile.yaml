@@ -1,0 +1,25 @@
+# hermes-traccia-integration Profile
+
+# Traccia Observability Configuration
+# This file configures Traccia tracing for Hermes Agent Desktop
+
+# Traccia SDK Settings
+traccia:
+  enabled: false
+  exporter: "console"  # console, jaeger, tempo, zipkin, otlp, traccia
+  endpoint: "http://localhost:4318/v1/traces"
+  api_key: ""  # Set via hermes config or environment variable TRACCIA_API_KEY
+  sample_rate: 1.0  # 0.0 to 1.0
+  capture_inputs: true
+  capture_outputs: true
+  redact_pii: true
+  max_string_length: 1000
+
+# Skill-specific settings
+hermes_traccia_integration:
+  # Trace scope for continuous tracing
+  trace_scope: "all"  # all, models, tools, skills, conversations
+  # Auto-initialize on Hermes startup
+  auto_init: false
+  # Export format for trace export command
+  default_export_format: "json"  # json, trace

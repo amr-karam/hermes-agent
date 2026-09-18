@@ -1,0 +1,144 @@
+{
+  "version": 2,
+  "skills": {
+    "autopilot": {
+      "lastSyncedAt": 1786769512754
+    },
+    "canvas": {
+      "lastSyncedAt": 1786769512754
+    },
+    "automate": {
+      "lastSyncedAt": 1786769512754
+    },
+    "create-hook": {
+      "lastSyncedAt": 1786769512754
+    },
+    "create-rule": {
+      "lastSyncedAt": 1786769512754
+    },
+    "create-skill": {
+      "lastSyncedAt": 1786769512754
+    },
+    "create-subagent": {
+      "lastSyncedAt": 1786769512754
+    },
+    "sdk": {
+      "lastSyncedAt": 1786769512754
+    },
+    "loop": {
+      "lastSyncedAt": 1786769512754
+    },
+    "migrate-to-builds": {
+      "lastSyncedAt": 1786769512754
+    },
+    "migrate-to-skills": {
+      "lastSyncedAt": 1786769512754
+    },
+    "onboard": {
+      "lastSyncedAt": 1786769512754
+    },
+    "review": {
+      "lastSyncedAt": 1786769512754
+    },
+    "review-bugbot": {
+      "lastSyncedAt": 1786769512754
+    },
+    "review-security": {
+      "lastSyncedAt": 1786769512754
+    },
+    "shell": {
+      "lastSyncedAt": 1786769512754
+    },
+    "split-to-prs": {
+      "lastSyncedAt": 1786769512754
+    },
+    "statusline": {
+      "lastSyncedAt": 1786769512754
+    },
+    "update-cli-config": {
+      "lastSyncedAt": 1786769512754
+    },
+    "update-cursor-settings": {
+      "lastSyncedAt": 1786769512754
+    },
+    "rename-chat": {
+      "lastSyncedAt": 1786769512754
+    },
+    "hermes-analytics-dashboard": {
+      "lastSyncedAt": 1786769512754,
+      "category": "analytics",
+      "status": "active"
+    },
+    "hermes-collaboration": {
+      "lastSyncedAt": 1786769512754,
+      "category": "collaboration",
+      "status": "active"
+    },
+    "hermes-advanced-moa-patterns": {
+      "lastSyncedAt": 1786769512754,
+      "category": "orchestration",
+      "status": "active"
+    },
+    "hermes-cross-platform-integration": {
+      "lastSyncedAt": 1786769512754,
+      "category": "devops",
+      "status": "active"
+    },
+    "hermes-model-switching": {
+      "lastSyncedAt": 1786769512754,
+      "category": "core",
+      "status": "active"
+    },
+    "hermes-profile-manager": {
+      "lastSyncedAt": 1786769512754,
+      "category": "core",
+      "status": "active"
+    },
+    "hermes-session-search": {
+      "lastSyncedAt": 1786769512754,
+      "category": "core",
+      "status": "active"
+    },
+    "hermes-session-management": {
+      "lastSyncedAt": 1786769512754,
+      "category": "core",
+      "status": "active"
+    },
+    "hermes-skill-manager": {
+      "lastSyncedAt": 1786769512754,
+      "category": "core",
+      "status": "active"
+    },
+    "hermes-skill-registry": {
+      "lastSyncedAt": 1786769512754,
+      "category": "core",
+      "status": "active"
+    },
+    "hermes-skill-validation": {
+      "lastSyncedAt": 1786769512754,
+      "category": "core",
+      "status": "active"
+    },
+    "hermes-performance-monitoring": {
+      "lastSyncedAt": 1786769512754,
+      "category": "monitoring",
+      "status": "active"
+    },
+    "hermes-security-auditor": {
+      "lastSyncedAt": 1786769512754,
+      "category": "security",
+      "status": "active"
+    },
+    "hermes-ecosystem-docs": {
+      "lastSyncedAt": 1786769512754,
+      "category": "documentation",
+      "status": "active"
+    },
+    "hermes-traccia-integration": {
+      "lastSyncedAt": 1786769512754,
+      "category": "devops",
+      "status": "active"
+    }
+  },
+  "lastInventoryAt": 1786759208929
+}
