@@ -6,6 +6,7 @@ import json
 import os
 import re
 import threading
+import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, Mapping
@@ -19,6 +20,8 @@ _PLUGIN_STATE_KEY_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
 _PLUGIN_STATE_QUOTA_BYTES = 10 * 1024 * 1024
 _PLUGIN_STATE_LOCKS: Dict[str, threading.RLock] = {}
 _PLUGIN_STATE_LOCKS_GUARD = threading.Lock()
+_LOCK_TIMEOUT_SECONDS = 10.0
+_LOCK_POLL_SECONDS = 0.05
 
 
 def _plugin_relative_segments(key: str) -> tuple[str, ...]:
@@ -90,7 +93,16 @@ def _locked_plugin_state(path: Path):
                     handle.write(b"\0")
                     handle.flush()
                 handle.seek(0)
-                msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+                deadline = time.monotonic() + _LOCK_TIMEOUT_SECONDS
+                while True:
+                    try:
+                        msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+                        break
+                    except OSError:
+                        if time.monotonic() >= deadline:
+                            raise
+                        time.sleep(_LOCK_POLL_SECONDS)
+                        handle.seek(0)
             else:
                 import fcntl
                 fcntl.flock(handle.fileno(), fcntl.LOCK_EX)

@@ -24,6 +24,8 @@ from agent.redact import redact_sensitive_text, register_redaction_patterns
 from utils import read_json_or_empty
 
 logger = logging.getLogger(__name__)
+_LOCK_TIMEOUT_SECONDS = 10.0
+_LOCK_POLL_SECONDS = 0.05
 
 ACCESS_TOKEN_PREFIX = "hch-at-"
 REFRESH_TOKEN_PREFIX = "hch-rt-"
@@ -57,7 +59,21 @@ def _os_lock(fh, lock: bool) -> None:
     if os.name == "nt":
         import msvcrt
         fh.seek(0)
-        msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK if lock else msvcrt.LK_UNLCK, 1)
+        if lock:
+            # LK_LOCK raises OSError(Errno 36, EDEADLK) when the same process
+            # already holds the lock; poll LK_NBLCK against the deadline instead.
+            deadline = time.monotonic() + _LOCK_TIMEOUT_SECONDS
+            while True:
+                try:
+                    msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+                    return
+                except OSError:
+                    if time.monotonic() >= deadline:
+                        raise
+                    time.sleep(_LOCK_POLL_SECONDS)
+                    fh.seek(0)
+        else:
+            msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
     else:
         import fcntl
         fcntl.flock(fh.fileno(), fcntl.LOCK_EX if lock else fcntl.LOCK_UN)

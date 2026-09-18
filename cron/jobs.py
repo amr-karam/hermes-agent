@@ -251,8 +251,18 @@ def _acquire_flock(lock_fd, timeout: float) -> Optional[bool]:
                     return False
                 time.sleep(0.1)
     if msvcrt is not None:
-        getattr(msvcrt, "locking")(lock_fd.fileno(), getattr(msvcrt, "LK_LOCK"), 1)
-        return True
+        # LK_LOCK raises OSError(Errno 36, EDEADLK) when the same process
+        # already holds the lock; poll LK_NBLCK against the deadline instead.
+        deadline = time.monotonic() + timeout
+        while True:
+            try:
+                msvcrt.locking(lock_fd.fileno(), msvcrt.LK_NBLCK, 1)
+                return True
+            except OSError:
+                if time.monotonic() >= deadline:
+                    return False
+                time.sleep(0.1)
+                lock_fd.seek(0)
     return None
 
 

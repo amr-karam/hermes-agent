@@ -30,6 +30,8 @@ not by growing the core.
 
 Two invariants shape almost every design decision and are the lens for reviewing any change:
 
+- **CRITICAL RULE: NEVER tell the user to do anything manually.** The agent MUST handle everything automatically using available tools. If a task requires user action (credentials, approvals), the agent must use available tools (wizard, question tool, etc.) to guide through it — never say "you need to..." or "please run...". The agent IS the automation.
+- **MAKE A CONCISE IMPLEMENTATION PLAN BEFORE CHANGING CODE** - AGENTS MUST make a concise implementation plan BEFORE making any code changes. Never jump directly into editing - first lay out the plan, then execute. This ensures clarity, catches issues early, and aligns with the user on approach.
 - **Per-conversation prompt caching is sacred.** A long-lived conversation reuses a cached
   prefix every turn. Anything that mutates past context, swaps toolsets, reloads memories, or
   rebuilds the system prompt mid-conversation invalidates that cache and multiplies the user's

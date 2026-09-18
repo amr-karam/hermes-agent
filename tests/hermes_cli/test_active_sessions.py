@@ -4,6 +4,7 @@ import subprocess
 import sys
 import threading
 import time
+import types
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -649,3 +650,50 @@ def test_liveness_guard_keeps_a_just_acquired_own_lease_it_cannot_vouch_for(
     ) as active:
         assert active is False
     assert active_sessions.active_session_registry_snapshot(home) == []
+
+
+def test_flock_windows_retries_on_same_process_contention(monkeypatch):
+    """LK_LOCK raises OSError(Errno 36, EDEADLK) when the same process already
+    holds the lock; _flock must retry with LK_NBLCK until the holder releases.
+
+    Regression test for the deadlock that crashed the notification poller when
+    find_canonical_live_owner raced with an in-process registry lock holder.
+    """
+    if not hasattr(__import__("msvcrt", fromlist=[""]), "LK_NBLCK"):
+        pytest.skip("msvcrt not available")
+
+    import msvcrt as _real_msvcrt
+    held = threading.Event()
+    contention_count = [0]
+
+    def fake_locking(fd, mode, nbytes):
+        if mode == _real_msvcrt.LK_NBLCK:
+            contention_count[0] += 1
+            if contention_count[0] == 1:
+                # Simulate same-process contention (EDEADLK).
+                raise OSError(36, "Resource deadlock avoided")
+            return
+        # LK_UNLCK — release immediately.
+        held.clear()
+
+    fake_msvcrt = types.SimpleNamespace(
+        LK_NBLCK=_real_msvcrt.LK_NBLCK,
+        LK_UNLCK=_real_msvcrt.LK_UNLCK,
+        locking=fake_locking,
+    )
+    monkeypatch.setattr(active_sessions.os, "name", "nt", raising=False)
+    monkeypatch.setitem(sys.modules, "msvcrt", fake_msvcrt)
+
+    tmp_path = Path(os.environ.get("HERMES_HOME", "/tmp")) / ".test_flock_retry"
+    tmp_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_file = tmp_path.with_suffix(".lock")
+    lock_file.parent.mkdir(parents=True, exist_ok=True)
+
+    fh = lock_file.open("a+b")
+    try:
+        # First attempt raises EDEADLK; second succeeds via retry loop.
+        active_sessions._flock(fh, lock=True)
+        assert contention_count[0] == 2  # one failed + one success
+        active_sessions._flock(fh, lock=False)  # cleanup
+    finally:
+        fh.close()

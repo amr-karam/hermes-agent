@@ -24,6 +24,14 @@ from utils import atomic_json_write
 
 logger = logging.getLogger(__name__)
 
+# Bounded cross-process registry lock on Windows: msvcrt.locking with LK_LOCK
+# raises OSError(Errno 36, EDEADLK) when the same process already holds the lock
+# on the region (e.g., a notification-poller thread races with a thread holding
+# the registry lock). Poll LK_NBLCK against a deadline instead, matching the
+# pattern used by backup.py / auth.py / hermes_state_common.py.
+_LOCK_TIMEOUT_SECONDS = 10.0
+_LOCK_POLL_SECONDS = 0.05
+
 
 class ActiveSessionRegistryError(RuntimeError):
     """The liveness registry could not prove a safe ownership decision."""
@@ -189,7 +197,19 @@ def _flock(fh, *, lock: bool) -> None:
     if os.name == "nt":
         import msvcrt
         fh.seek(0)
-        msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK if lock else msvcrt.LK_UNLCK, 1)
+        if lock:
+            deadline = time.monotonic() + _LOCK_TIMEOUT_SECONDS
+            while True:
+                try:
+                    msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+                    return
+                except OSError:
+                    if time.monotonic() >= deadline:
+                        raise
+                    time.sleep(_LOCK_POLL_SECONDS)
+                    fh.seek(0)
+        else:
+            msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
     else:
         import fcntl
         fcntl.flock(fh.fileno(), fcntl.LOCK_EX if lock else fcntl.LOCK_UN)

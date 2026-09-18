@@ -64,6 +64,10 @@ def _find_unique_match(entries: List[str], old_text: str) -> Tuple[Optional[int]
     return (matches[0] if matches else None), False
 
 
+_LOCK_TIMEOUT_SECONDS = 10.0
+_LOCK_POLL_SECONDS = 0.05
+
+
 class MemoryStore:
     """Bounded curated memory with file persistence; one instance per AIAgent.
     ``_system_prompt_snapshot`` is frozen at load time (prefix-cache stable);
@@ -175,9 +179,22 @@ class MemoryStore:
             def _flock(unlock: bool):
                 if fcntl:
                     fcntl.flock(fd, fcntl.LOCK_UN if unlock else fcntl.LOCK_EX)
+                elif not unlock:
+                    # LK_LOCK raises OSError(Errno 36, EDEADLK) when the same
+                    # process already holds the lock; poll LK_NBLCK instead.
+                    deadline = time.monotonic() + _LOCK_TIMEOUT_SECONDS
+                    while True:
+                        try:
+                            msvcrt.locking(fd.fileno(), msvcrt.LK_NBLCK, 1)
+                            return
+                        except OSError:
+                            if time.monotonic() >= deadline:
+                                raise
+                            time.sleep(_LOCK_POLL_SECONDS)
+                            fd.seek(0)
                 else:
                     fd.seek(0)
-                    msvcrt.locking(fd.fileno(), msvcrt.LK_UNLCK if unlock else msvcrt.LK_LOCK, 1)
+                    msvcrt.locking(fd.fileno(), msvcrt.LK_UNLCK, 1)
             _flock(False)
             try:
                 yield

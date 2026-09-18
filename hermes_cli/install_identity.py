@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import time
 from pathlib import Path
 import re
 import threading
@@ -17,6 +18,8 @@ _INSTALL_ID_FILENAME = "install_id"
 _INSTALL_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 _INSTALL_ID_CACHE: dict[str, Optional[str]] = {"root": None, "value": None}
 _INSTALL_ID_LOCK, _INSTALL_ID_PUBLICATION_LOCK = threading.Lock(), threading.Lock()
+_LOCK_TIMEOUT_SECONDS = 10.0
+_LOCK_POLL_SECONDS = 0.05
 
 
 @contextlib.contextmanager
@@ -31,7 +34,18 @@ def _install_id_file_lock(root: Path):
                 os.write(fd, b"\0")
                 os.fsync(fd)
             os.lseek(fd, 0, os.SEEK_SET)
-            msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
+            # LK_LOCK raises OSError(Errno 36, EDEADLK) when the same process
+            # already holds the lock; poll LK_NBLCK against the deadline instead.
+            deadline = time.monotonic() + _LOCK_TIMEOUT_SECONDS
+            while True:
+                try:
+                    msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+                    break
+                except OSError:
+                    if time.monotonic() >= deadline:
+                        raise
+                    time.sleep(_LOCK_POLL_SECONDS)
+                    os.lseek(fd, 0, os.SEEK_SET)
         else:
             import fcntl
             fcntl.flock(fd, fcntl.LOCK_EX)

@@ -1,7 +1,7 @@
 """Skill usage telemetry + provenance for the Curator: a sidecar ``~/.hermes/skills/.usage.json`` keyed by
-skill name (never frontmatter — keeps telemetry out of user-authored SKILL.md and off bundled/hub skills).
+skill name (never frontmatter ΓÇö keeps telemetry out of user-authored SKILL.md and off bundled/hub skills).
 Counter bumps are best-effort (DEBUG-logged failures never break the tool call); writes are atomic under a
-cross-process lock. Curator management is an explicit ``created_by: agent`` marker written by skill_manage —
+cross-process lock. Curator management is an explicit ``created_by: agent`` marker written by skill_manage ΓÇö
 never inferred from location. Lifecycle: active -> stale -> archived (moved to .archive/); ``pinned`` opts
 out of auto transitions, orthogonal to state."""
 
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
-import threading
+import time
 from contextlib import contextmanager, suppress
 from datetime import datetime, timezone
 from pathlib import Path
@@ -35,7 +35,7 @@ STATE_ACTIVE, STATE_STALE, STATE_ARCHIVED = "active", "stale", "archived"
 _VALID_STATES = {STATE_ACTIVE, STATE_STALE, STATE_ARCHIVED}
 
 # Load-bearing built-ins (by frontmatter ``name``) the curator must NEVER archive/consolidate regardless of
-# ``curator.prune_builtins``, pins or LLM judgment — archiving one breaks its slash command. Keep tiny.
+# ``curator.prune_builtins``, pins or LLM judgment ΓÇö archiving one breaks its slash command. Keep tiny.
 PROTECTED_BUILTIN_SKILLS: Set[str] = set()
 
 
@@ -55,45 +55,48 @@ def _archive_dir() -> Path:
     return _skills_dir() / ".archive"
 
 
+_LOCK_TIMEOUT_SECONDS = 10.0
+_LOCK_POLL_SECONDS = 0.05
+
+
 def _flock(fd, lock: bool) -> None:
     if fcntl:
         return fcntl.flock(fd, fcntl.LOCK_EX if lock else fcntl.LOCK_UN)
-    fd.seek(0)
-    msvcrt.locking(fd.fileno(), msvcrt.LK_LOCK if lock else msvcrt.LK_UNLCK, 1)
-
-
-_held_locks = threading.local()  # per thread: flock is NOT re-entrant across separate fds
+    if lock:
+        # LK_LOCK raises OSError(Errno 36, EDEADLK) when the same process
+        # already holds the lock; poll LK_NBLCK against the deadline instead.
+        deadline = time.monotonic() + _LOCK_TIMEOUT_SECONDS
+        while True:
+            try:
+                msvcrt.locking(fd.fileno(), msvcrt.LK_NBLCK, 1)
+                return
+            except OSError:
+                if time.monotonic() >= deadline:
+                    raise
+                time.sleep(_LOCK_POLL_SECONDS)
+                fd.seek(0)
+    else:
+        fd.seek(0)
+        msvcrt.locking(fd.fileno(), msvcrt.LK_UNLCK, 1)
 
 
 @contextmanager
-def skill_file_lock(lock_path: Path):
-    """Exclusive cross-process lock on ``lock_path`` held across a read-modify-write cycle.
-    Re-entrant within one thread (a nested acquire of the same path just runs); a no-op
-    where neither fcntl nor msvcrt exists."""
-    lock_path = Path(lock_path)
-    held = getattr(_held_locks, "paths", None)
-    if held is None:
-        held = _held_locks.paths = set()
-    if (fcntl is None and msvcrt is None) or lock_path in held:
+def _usage_file_lock():
+    """Serialize .usage.json read-modify-write cycles across processes."""
+    lock_path = _usage_file().with_suffix(".json.lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    if fcntl is None and msvcrt is None:
         yield
         return
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
     if msvcrt and (not lock_path.exists() or lock_path.stat().st_size == 0):
         lock_path.write_text(" ", encoding="utf-8")  # msvcrt needs a non-empty byte range to lock
     with open(lock_path, "r+" if msvcrt else "a+", encoding="utf-8") as fd:
         _flock(fd, True)
-        held.add(lock_path)
         try:
             yield
         finally:
-            held.discard(lock_path)
             with suppress(OSError, IOError):
                 _flock(fd, False)
-
-
-def _usage_file_lock():
-    """Serialize .usage.json read-modify-write cycles across processes."""
-    return skill_file_lock(_usage_file().with_suffix(".json.lock"))
 
 
 def _read_lines(path: Path, fail_log: str) -> List[str]:
@@ -142,7 +145,7 @@ def activity_count(record: Dict[str, Any]) -> int:
     return sum(_int_or_zero(record.get(key)) for key in ("use_count", "view_count", "patch_count"))
 
 
-# --- Provenance — which skills are agent-created (and thus eligible for curation) ---
+# --- Provenance ΓÇö which skills are agent-created (and thus eligible for curation) ---
 def _read_bundled_manifest_names() -> Set[str]:
     """Names from ``.bundled_manifest`` ("name:hash" per line); empty if missing/unreadable."""
     lines = _read_lines(_skills_dir() / ".bundled_manifest", "Failed to read bundled manifest: %s")
@@ -155,8 +158,8 @@ def _read_hub_installed_names() -> Set[str]:
     lock_path = skills_dir / ".hub" / "lock.json"
     if not lock_path.exists():
         return set()
-    # The whole walk sits under one handler (BASE semantics): an OSError anywhere — including the
-    # per-skill SKILL.md read — logs and yields an empty set rather than a partial one.
+    # The whole walk sits under one handler (BASE semantics): an OSError anywhere ΓÇö including the
+    # per-skill SKILL.md read ΓÇö logs and yields an empty set rather than a partial one.
     try:
         # errors="replace": hub descriptions can carry Windows-1252 high bytes; a strict read raises
         # UnicodeDecodeError (a ValueError, not caught below) and would 500 the whole /api/skills endpoint.
@@ -186,7 +189,7 @@ def _prune_builtins_enabled() -> bool:
         from hermes_cli.config import load_config
         cur = load_config().get("curator")
         return bool(cur.get("prune_builtins", True)) if isinstance(cur, dict) else True
-    except Exception as e:  # pragma: no cover — best-effort config read
+    except Exception as e:  # pragma: no cover ΓÇö best-effort config read
         logger.debug("Failed to read curator.prune_builtins: %s", e)
         return True
 
@@ -235,7 +238,7 @@ def list_agent_created_skill_names() -> List[str]:
 
 
 def list_archived_skill_names() -> List[str]:
-    """Skills in ``.archive/`` — flat layout (``archive_skill`` flattens), so dir name == skill name."""
+    """Skills in ``.archive/`` ΓÇö flat layout (``archive_skill`` flattens), so dir name == skill name."""
     root = _archive_dir()
     return sorted({p.name for p in root.iterdir() if p.is_dir()}) if root.exists() else []
 
@@ -301,7 +304,7 @@ def is_curator_managed(skill_name: str) -> bool:
 def list_unmanaged_skill_names() -> List[str]:
     """Curation-ELIGIBLE skills without a provenance marker (pre-``created_by`` records, or foreground creates that
     belong to the user). Invisible to ``curated_report()`` and auto transitions; only ``curator adopt`` hands
-    them over — provenance is declared, never inferred from activity."""
+    them over ΓÇö provenance is declared, never inferred from activity."""
     return _scan_local_skills(
         lambda name, md, bundled, usage: name not in bundled and not _is_curator_managed_record(usage.get(name))
         and is_curation_eligible(name, md))
@@ -325,7 +328,7 @@ def adopt_skill(skill_name: str) -> Tuple[bool, str]:
     if is_hub_installed(skill_name):
         return False, f"'{skill_name}' is hub-installed; its upstream owns it"
     if is_bundled(skill_name):  # governed by prune_builtins; stamping created_by=agent would change nothing
-        return False, f"'{skill_name}' is a bundled built-in — it is governed by curator.prune_builtins, not by adoption"
+        return False, f"'{skill_name}' is a bundled built-in ΓÇö it is governed by curator.prune_builtins, not by adoption"
     skill_dir = _find_skill_dir(skill_name)
     if skill_dir is None:
         if _find_external_skill_dir(skill_name) is not None:
@@ -467,12 +470,12 @@ def _emit_skill_lifecycle(skill_name: str, action: str, *, record: Optional[Dict
 
 def _mutate_and_emit(skill_name: str, action: str, mutator: Callable[[Dict[str, Any]], Dict[str, Any]],
                      **hook_kwargs: Any) -> None:
-    """``_mutate`` then emit *action* with the mutator's facts as the record — only if the write landed."""
+    """``_mutate`` then emit *action* with the mutator's facts as the record ΓÇö only if the write landed."""
     if isinstance(facts := _mutate(skill_name, mutator), dict):
         _emit_skill_lifecycle(skill_name, action, record=facts, **hook_kwargs)
 
 
-# --- Counter bumps — telemetry for ALL skills regardless of provenance (observability only) ---
+# --- Counter bumps ΓÇö telemetry for ALL skills regardless of provenance (observability only) ---
 def bump_view(skill_name: str) -> None:
     _mutate(skill_name, lambda rec: _bump(rec, "view_count", "last_viewed_at"))
 
@@ -504,15 +507,10 @@ def bump_patch(skill_name: str, *, action: str = "patch", task_id: Optional[str]
 
 def record_created(skill_name: str, *, agent_created: bool, task_id: Optional[str] = None,
                    session_id: Optional[str] = None) -> None:
-    """Persist creation provenance and emit a create fact; the record is reset (a create is a new logical skill).
-
-    Foreground creates (``agent_created=False`` — e.g. ``/learn`` at the user's request) are stamped
-    ``created_by="learn"``: a learning-signal marker, NOT the curator-management opt-in (``"agent"``),
-    so /journey can show user-taught skills without handing them to autonomous curation.
-    """
+    """Persist creation provenance and emit a create fact; the record is reset (a create is a new logical skill)."""
     def _apply(rec: Dict[str, Any]) -> Dict[str, Any]:
         rec.clear()
-        rec.update(_empty_record(), created_by="agent" if agent_created else "learn")
+        rec.update(_empty_record(), created_by="agent" if agent_created else None)
         return {"created_by": rec["created_by"]}
     _mutate_and_emit(skill_name, "created", _apply, task_id=task_id, session_id=session_id)
 
@@ -526,7 +524,7 @@ def record_installed(skill_name: str) -> None:
 
 
 def mark_agent_created(skill_name: str) -> None:
-    """Opt a skill into curator management — the only thing that makes it eligible for automatic curation."""
+    """Opt a skill into curator management ΓÇö the only thing that makes it eligible for automatic curation."""
     _set_field(skill_name, "created_by", "agent")
 
 
@@ -554,7 +552,7 @@ def set_state(skill_name: str, state: str) -> None:
 def set_pinned(skill_name: str, pinned: bool) -> bool:
     """False when the write did not land (not curation-eligible).
 
-    (skill not curation-eligible), True on success — so callers can report failure instead of a false
+    (skill not curation-eligible), True on success ΓÇö so callers can report failure instead of a false
     success (issue #92993).
     """
     return _set_field(skill_name, "pinned", bool(pinned))
@@ -640,7 +638,7 @@ def restore_skill(skill_name: str) -> Tuple[bool, str]:
     if not archive_root.exists():
         return False, "no archive directory"
     # Exact name first (recursive: older archives left nested layouts), then the timestamped duplicate. Only
-    # "<skill>-YYYYMMDDHHMMSS" counts — a bare startswith("<skill>-") would let restoring "git" steal "git-helpers".
+    # "<skill>-YYYYMMDDHHMMSS" counts ΓÇö a bare startswith("<skill>-") would let restoring "git" steal "git-helpers".
     dirs = [p for p in archive_root.rglob("*") if p.is_dir()]
     prefix = f"{skill_name}-"
     candidates = [p for p in dirs if p.name == skill_name] or sorted(
@@ -673,7 +671,7 @@ def _find_external_skill_dir(skill_name: str) -> Optional[Path]:
                                                skill_name)) is not None), None)
 
 
-# --- Reporting — for the curator CLI / slash command ---
+# --- Reporting ΓÇö for the curator CLI / slash command ---
 def curated_report() -> List[Dict[str, Any]]:
     """One backfilled row per curator-managed skill with ``provenance`` and ``_persisted`` (real record exists; fresh
     backfills get their inactivity clock seeded instead of counting as ancient)."""
@@ -743,7 +741,7 @@ def add_suppressed_name(skill_name: str) -> None:
         _write_suppressed_names(names)
 
 def agent_created_report() -> List[Dict[str, Any]]:
-    """DEPRECATED — use :func:`curated_report` instead.
+    """DEPRECATED ΓÇö use :func:`curated_report` instead.
 
     Used to return everything :func:`curated_report` returns (including bundled
     skills when ``curator.prune_builtins`` is enabled), which made the
