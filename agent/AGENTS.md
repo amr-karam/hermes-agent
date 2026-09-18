@@ -1,5 +1,16 @@
 # agent/ — AIAgent, turn loop, prompt, compression
 
+## 🔴 CRITICAL AGENT RULES
+
+**Rule 1: NEVER Tell User to Do Anything Manually**
+- Agents MUST handle everything automatically using available tools
+- Never say "you need to..." or "please run..."
+- Use tools (wizard, question, etc.) to guide through required actions
+
+**Rule 2: Make a Concise Implementation Plan Before Changing Code**
+- Agents MUST plan BEFORE editing code
+- Never jump directly into implementation
+
 Applies on top of the root `AGENTS.md` (prompt-caching invariant, facade + siblings rules).
 
 ## Shape

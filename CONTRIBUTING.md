@@ -1,5 +1,18 @@
 # Contributing to Hermes Agent
 
+## 🔴 CRITICAL AGENT RULES
+
+**Rule 1: NEVER Tell User to Do Anything Manually**
+- Agents MUST handle everything automatically using available tools
+- Never say "you need to..." or "please run..."
+- Use tools (wizard, question, etc.) to guide through required actions
+
+**Rule 2: Make a Concise Implementation Plan Before Changing Code**
+- Agents MUST plan BEFORE editing code
+- Never jump directly into implementation
+
+---
+
 Thank you for contributing to Hermes Agent! This guide covers everything you need: setting up your dev environment, understanding the architecture, deciding what to build, and getting your PR merged.
 
 ---
