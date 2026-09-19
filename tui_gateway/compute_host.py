@@ -252,11 +252,23 @@ class ComputeHost:
                 display_metadata=(frame.get("display_metadata")
                                   if isinstance(frame.get("display_metadata"), dict) else None))
             run_thread = session.get("_run_thread")
+            # The activity clock starts when the turn's work is underway, not at
+            # dispatch: agent construction and turn-entry stamps happen inside
+            # _run_prompt_submit, and a reused agent's previous-turn touches must
+            # not lend freshness to a turn that has not made progress itself.
+            # Wall clocks cannot order those: Windows time.time ticks at ~15.6ms,
+            # so construction and capture routinely share a tick and `>=` lets a
+            # pre-turn touch through. Fence on the mixin's touch generation
+            # instead — it advances once per _touch_activity under the lock.
+            turn_started_at = time.time()
+            turn_started_gen = getattr(
+                session.get("agent"), "_turn_liveness_activity_generation", None)
             if run_thread is not None and hasattr(run_thread, "join"):
                 while run_thread.is_alive():
                     run_thread.join(timeout=1.0)
                     if run_thread.is_alive() and frame.get("turn_id"):
-                        self._emit_turn_activity(sid, session, frame["turn_id"], turn_started_at)
+                        self._emit_turn_activity(
+                            sid, session, frame["turn_id"], turn_started_at, turn_started_gen)
             with session["history_lock"]:
                 meta = _history_meta(session)
                 interrupted = bool(session.get("_turn_cancel_requested"))
@@ -276,7 +288,8 @@ class ComputeHost:
                         server._clear_inflight_turn(session)
             self._reply("turn.error", sid, request_id, reason="exception", message=str(exc))
 
-    def _emit_turn_activity(self, sid: str, session: dict, turn_id: str, started_at: float) -> None:
+    def _emit_turn_activity(self, sid: str, session: dict, turn_id: str, started_at: float,
+                              started_gen: int | None = None) -> None:
         # Observe the agent clock, never the host heartbeat. A reused agent's last
         # turn must not lend its activity to a new turn that has not made progress.
         activity_ns = None
@@ -284,7 +297,14 @@ class ComputeHost:
             summary = session["agent"].get_activity_summary()
             stamped_at = summary.get("last_activity_at")
             elapsed = summary.get("seconds_since_activity")
-            if stamped_at is not None and stamped_at >= started_at and elapsed is not None and elapsed >= 0:
+            current_gen = getattr(session.get("agent"), "_turn_liveness_activity_generation", None)
+            if started_gen is not None and current_gen is not None:
+                progressed = current_gen > started_gen
+            else:
+                # No generation counter (non-mixin agent): strict wall comparison
+                # so a same-tick pre-turn touch stays fenced.
+                progressed = stamped_at is not None and stamped_at > started_at
+            if progressed and elapsed is not None and elapsed >= 0:
                 activity_ns = now_ns() - int(elapsed * 1_000_000_000)
         except Exception:
             logging.getLogger(__name__).debug("compute host activity unavailable sid=%s", sid, exc_info=True)

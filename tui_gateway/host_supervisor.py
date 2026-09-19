@@ -46,15 +46,23 @@ _CONTROL_REPLY_TYPES = frozenset({
     "reload_mcp.ack", "shutdown.ack"})
 
 
+# Serializes concurrent appenders inside this process. O_APPEND itself is atomic
+# per write, but interleaved multi-KiB records from racing threads fragment the
+# log; the lock keeps one record contiguous. Cross-process races stay possible
+# (POSIX advisory locking is unreliable on Windows shares) — acceptable for logs.
+_APPEND_LOCK = threading.Lock()
+
+
 def append_log_record(path: str | Path, record: str) -> None:
     """Append one log record using O_APPEND and exactly one os.write call."""
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     text = record if record.endswith("\n") else f"{record}\n"
-    fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
-    try:
-        os.write(fd, text.encode("utf-8", errors="replace"))
-    finally:
-        os.close(fd)
+    with _APPEND_LOCK:
+        fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+        try:
+            os.write(fd, text.encode("utf-8", errors="replace"))
+        finally:
+            os.close(fd)
 
 
 def _repo_root() -> Path:
@@ -84,10 +92,26 @@ def _call_logged(cb: Callable[[dict], None], frame: dict, failure: str) -> None:
 
 
 def _pid_alive(pid: int) -> bool:
+    # Canonical probe: os.kill(pid, 0) is TerminateProcess on Windows (kills the
+    # process instead of probing it). gateway.status._pid_exists does the right
+    # thing per platform (psutil → ctypes OpenProcess on Windows, kill-0 POSIX).
+    # Late import: gateway.status must not become an import-time dependency here.
+    try:
+        from gateway.status import _pid_exists
+    except Exception:
+        pass
+    else:
+        with contextlib.suppress(Exception):
+            return bool(_pid_exists(pid))
+    if sys.platform == "win32":
+        # No safe stdlib probe on Windows (kill(pid, 0) terminates); the
+        # canonical helper above is the only probe. Degraded = report
+        # not-alive rather than risk TerminateProcess.
+        return False
     if pid <= 0:
         return False
     try:
-        os.kill(pid, 0)
+        os.kill(pid, 0)  # windows-footgun: ok — unreachable on win32 (gated above); POSIX-only fallback
         return True
     except Exception as exc:
         return isinstance(exc, PermissionError)
@@ -467,12 +491,15 @@ class HostSupervisor:
     _pid_matches_compute_host = staticmethod(is_compute_host_identity)
 
     def _terminate_pid(self, pid: int, *, timeout: float = _SHUTDOWN_TIMEOUT_SECS) -> None:
+        # windows-footgun: ok — SIGKILL does not exist on Windows; getattr falls
+        # back to SIGTERM and _pid_alive probes via the canonical helper.
+        _sigkill = getattr(signal, "SIGKILL", signal.SIGTERM)
         if not _signal_pid(pid, signal.SIGTERM, "SIGTERM"):
             return
         deadline = time.monotonic() + timeout
         while _pid_alive(pid):
             if time.monotonic() >= deadline:
-                _signal_pid(pid, signal.SIGKILL, "SIGKILL")
+                _signal_pid(pid, _sigkill, "SIGKILL")
                 return
             time.sleep(0.05)
 
