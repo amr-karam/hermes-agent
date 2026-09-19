@@ -1200,6 +1200,26 @@ def _active_config_path() -> Path:
     return Path(override if isinstance(override, str) and override else _hermes_home) / "config.yaml"
 
 
+def _cfg_file_sig(p: Path) -> tuple | None:
+    """Cache key for the raw-config cache: stat signature PLUS a content hash.
+
+    ``file_signature`` alone is blind to a same-size replacement that keeps the
+    old mtime on Windows (in-place rewrite: same size, same inode, creation-time
+    ctime — ``shutil.copy2`` + ``os.utime`` pins mtime too; #111105). The sha256
+    closes that hole: a byte-identical file keeps the key, any replacement busts
+    it. Costs one small-file read per ``_load_cfg_raw`` call — config.yaml is KBs
+    and the call sites are config mutations/inspections, never hot loops.
+    """
+    try:
+        if not p.exists():
+            return None
+        st = p.stat()
+        digest = hashlib.sha256(p.read_bytes()).hexdigest()
+    except Exception:
+        return None
+    return (*file_signature(st), digest)
+
+
 def _load_cfg_raw() -> dict:
     """The active profile's config.yaml EXACTLY as written — the write-back primitive, ONLY for
     read→mutate→``_save_cfg`` round-trips and raw inspection (defaults / managed overlay / ``${VAR}``
@@ -1208,7 +1228,7 @@ def _load_cfg_raw() -> dict:
     global _cfg_cache, _cfg_sig, _cfg_path
     with contextlib.suppress(Exception):
         p = _active_config_path()
-        sig = file_signature(p.stat()) if p.exists() else None
+        sig = _cfg_file_sig(p)
         with _cfg_lock:
             if _cfg_cache is not None and _cfg_sig == sig and _cfg_path == p:
                 return copy.deepcopy(_cfg_cache)
@@ -1240,10 +1260,7 @@ def _save_cfg(cfg: dict):
     atomic_roundtrip_yaml_save(path, cfg)
     with _cfg_lock:
         _cfg_cache, _cfg_path = copy.deepcopy(cfg), path
-        try:
-            _cfg_sig = file_signature(path.stat())
-        except Exception:
-            _cfg_sig = None
+        _cfg_sig = _cfg_file_sig(path)
 
 
 def _session_for_key(session_key: str) -> dict | None:
