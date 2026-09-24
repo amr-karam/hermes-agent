@@ -377,6 +377,11 @@ declare global {
        *  --skip-intro) so a fresh HERMES_HOME lands on the guided chat. */
       skipIntro?: boolean
       setTranslucency?: (payload: TranslucencyState) => void
+      // Surface operations
+      setTheme?: (payload: { mode: 'light' | 'dark' | 'system' }) => void
+      setAccentColor?: (payload: { color: string; source: 'user' | 'system' }) => void
+      setWallpaper?: (payload: { path: string; position?: 'fill' | 'fit' | 'stretch' | 'tile' | 'center' }) => void
+      setTransparency?: (payload: { enabled: boolean }) => void
       setKeepAwake?: (on: boolean) => void
       setDisableF12?: (blocked: boolean) => void
       setPreviewShortcutActive?: (active: boolean) => void

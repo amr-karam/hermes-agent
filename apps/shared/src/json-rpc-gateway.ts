@@ -39,6 +39,11 @@ export interface GatewayClientOptions {
 const ANY = '*'
 const DEFAULT_REQUEST_TIMEOUT_MS = 120_000
 
+interface ReplayResponse {
+  events?: Array<{ type: string; session_id?: string; seq?: number; payload?: unknown }>
+  epoch?: string
+}
+
 const isGatewayReady = (event: GatewayEvent): event is GatewayEvent<'gateway.ready'> => event.type === 'gateway.ready'
 // Replay fetch after reconnect: bounded so a wedged backend can't hold the
 // guard open; generous enough for a 512-frame ring to drain.
@@ -68,8 +73,13 @@ export function isGatewayWebSocketUrl(value: unknown): value is string {
  */
 export class GatewayEventHub {
   private readonly handlers = new Map<string, Set<(event: GatewayEvent) => void>>()
+  private hasAnyHandlers = false
 
   on<K extends GatewayEventName>(type: K, handler: (event: GatewayEvent<K>) => void): () => void {
+    if (type === (ANY as GatewayEventName)) {
+      this.hasAnyHandlers = true
+    }
+
     let set = this.handlers.get(type)
 
     if (!set) {
@@ -79,21 +89,33 @@ export class GatewayEventHub {
 
     set.add(handler as (event: GatewayEvent) => void)
 
-    return () => set?.delete(handler as (event: GatewayEvent) => void)
+    return () => {
+      set?.delete(handler as (event: GatewayEvent) => void)
+      if (this.handlers.get(type) === undefined) {
+        this.hasAnyHandlers = false
+      }
+    }
   }
 
   onAny(handler: (event: GatewayEvent) => void): () => void {
-    // ANY is a client-side wildcard, not a wire name; it never reaches the typed map.
     return this.on(ANY as GatewayEventName, handler as (event: GatewayEvent<GatewayEventName>) => void)
   }
 
   dispatch(event: GatewayEvent): void {
-    for (const handler of this.handlers.get(event.type) ?? []) {
-      handler(event)
+    const typed = this.handlers.get(event.type)
+    if (typed) {
+      for (const handler of typed) {
+        handler(event)
+      }
     }
 
-    for (const handler of this.handlers.get(ANY) ?? []) {
-      handler(event)
+    if (this.hasAnyHandlers) {
+      const any = this.handlers.get(ANY)
+      if (any) {
+        for (const handler of any) {
+          handler(event)
+        }
+      }
     }
   }
 }
@@ -124,6 +146,8 @@ export class JsonRpcGatewayClient {
    * advances the watermark so the gap events the replay carries get skipped.
    */
   private replayHold: Map<string, GatewayEvent[]> | null = null
+  /** Cached seq watermarks snapshot; invalidated on map mutation. */
+  private seqWatermarksCache: Record<string, number> | null = null
   /**
    * Server process identity for the replay contract (from gateway.ready /
    * session.events.since). Seq counters are in-process on the backend, so a
@@ -438,19 +462,26 @@ export class JsonRpcGatewayClient {
       return
     }
 
-    const prev = this.lastSeenSeq.get(sid) ?? 0
-
-    if (seq > prev) {
+    const prev = this.lastSeenSeq.get(sid)
+    if (prev === undefined || seq > prev) {
       this.lastSeenSeq.set(sid, seq)
+      this.invalidateSeqCache()
     }
   }
 
   /** Test/telemetry hook: current last-seen seq map snapshot. */
   getSeqWatermarks(): Record<string, number> {
-    return Object.fromEntries(this.lastSeenSeq)
+    if (!this.seqWatermarksCache) {
+      this.seqWatermarksCache = Object.fromEntries(this.lastSeenSeq)
+    }
+    return this.seqWatermarksCache
   }
 
-  /**
+  private invalidateSeqCache(): void {
+    this.seqWatermarksCache = null
+  }
+
+/**
    * After a reconnect, ask the gateway to replay every event newer than our
    * per-session watermarks. Replayed frames go through the SAME dispatchEvent
    * path as live frames — dedupe happens naturally because recordSeq ignores
@@ -464,29 +495,22 @@ export class JsonRpcGatewayClient {
 
     this.replayInFlight = true
     const replayGeneration = ++this.replayGeneration
-    // Park live frames for the sessions we're about to replay so a frame
-    // racing the replay response can't dispatch ahead of (or duplicate) the
-    // gap events. Sessions without watermarks are unaffected.
+    
+    // Only create hold for sessions we're actually replaying
     const hold = new Map<string, GatewayEvent[]>()
-
-    for (const sid of this.lastSeenSeq.keys()) {
+    const entries = Object.entries(this.getSeqWatermarks())
+    
+    for (const [sid] of entries) {
       hold.set(sid, [])
     }
-
     this.replayHold = hold
 
     try {
-      const entries = Object.entries(this.getSeqWatermarks())
-
       // One RPC per known session keeps params flat; sessions are few (<20).
       const results = await Promise.allSettled(
         entries.map(([sid, lastSeen]) =>
           // `open_requests` on the answer are re-delivered by the channel itself.
-          this.request<{ events?: Array<{ type: string; session_id?: string; seq?: number; payload?: unknown }> }>(
-            'session.events.since',
-            { session_id: sid, last_seen: lastSeen },
-            REPLAY_REQUEST_TIMEOUT_MS
-          )
+          this.request<ReplayResponse>('session.events.since', { session_id: sid, last_seen: lastSeen }, REPLAY_REQUEST_TIMEOUT_MS)
         )
       )
 
@@ -502,7 +526,7 @@ export class JsonRpcGatewayClient {
           continue
         }
 
-        const epoch = (result.value as { epoch?: unknown }).epoch
+        const epoch = result.value.epoch
 
         if (typeof epoch === 'string' && epoch && this.replayEpoch && epoch !== this.replayEpoch) {
           // Backend restarted: its seq numbering reset, so our watermarks —
@@ -544,13 +568,14 @@ export class JsonRpcGatewayClient {
     const seq = event.seq
 
     if (sid && typeof seq === 'number' && Number.isFinite(seq)) {
-      const prev = this.lastSeenSeq.get(sid) ?? 0
+      const prev = this.lastSeenSeq.get(sid)
 
-      if (seq <= prev) {
+      if (prev !== undefined && seq <= prev) {
         return
       }
 
       this.lastSeenSeq.set(sid, seq)
+      this.invalidateSeqCache()
     }
 
     this.dispatchEvent(event)
@@ -568,6 +593,7 @@ export class JsonRpcGatewayClient {
 
     if (this.replayEpoch !== null) {
       this.lastSeenSeq.clear()
+      this.invalidateSeqCache()
     }
 
     this.replayEpoch = epoch

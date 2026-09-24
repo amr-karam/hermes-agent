@@ -2,7 +2,7 @@ import './particle-field.css'
 
 import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 
-import { cn } from '@/lib/utils'
+import { usePrefersReducedMotion } from '@/hooks/use-prefers-reduced-motion'
 
 /**
  * Reusable float-up particle emitter. It owns the motion (rise + organic sway +
@@ -123,6 +123,7 @@ export interface ParticleFieldProps {
 }
 
 export function ParticleField({ emitter, glyph, colors, config, className, style }: ParticleFieldProps) {
+  const reduceMotion = usePrefersReducedMotion()
   const cfg = useMemo(() => ({ ...DEFAULT_PARTICLE_CONFIG, ...config }), [config])
   const [particles, setParticles] = useState<Particle[]>([])
   const timers = useRef<Set<ReturnType<typeof setTimeout>>>(new Set())
@@ -136,7 +137,7 @@ export function ParticleField({ emitter, glyph, colors, config, className, style
     const onBurst = (count?: number) => {
       const n = Math.max(1, Math.min(cfg.maxAlive, Math.round(count ?? cfg.count)))
 
-      if (prefersReducedMotion()) {
+      if (reduceMotion) {
         add()
 
         return
@@ -159,7 +160,7 @@ export function ParticleField({ emitter, glyph, colors, config, className, style
       pool.forEach(clearTimeout)
       pool.clear()
     }
-  }, [cfg, colors, emitter])
+  }, [cfg, colors, emitter, reduceMotion])
 
   const remove = (id: number) => setParticles(prev => prev.filter(p => p.id !== id))
 

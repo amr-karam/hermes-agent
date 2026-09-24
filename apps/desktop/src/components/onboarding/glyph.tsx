@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import { usePrefersReducedMotion } from '@/hooks/use-prefers-reduced-motion'
 import { Loader2 } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 
@@ -38,16 +39,15 @@ export function GlyphText({ text }: { text: string }) {
 function useDecoded(text: string): string {
   const [out, setOut] = useState(text)
 
+  const reduceMotion = usePrefersReducedMotion()
+
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+    if (reduceMotion) {
       setOut(text)
 
       return
     }
 
-    // Each WORD keeps its head static and only churns its tail (last few chars),
-    // resolving left-to-right across all tails — same anchor-the-prefix trick the
-    // connecting overlay uses ("CONN" static, "ECTING" churns), applied per word
     // so both the provider and "CONNECTED" decode and time stays constant.
     const chars = [...text]
     const scrambleable = chars.map(() => false)
@@ -87,7 +87,7 @@ function useDecoded(text: string): string {
     }, 45)
 
     return () => window.clearInterval(id)
-  }, [text])
+  }, [text, reduceMotion])
 
   return out
 }

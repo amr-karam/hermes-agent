@@ -350,6 +350,11 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
   setTitleBarTheme: payload => ipcRenderer.send('hermes:titlebar-theme', payload),
   setNativeTheme: mode => ipcRenderer.send('hermes:native-theme', mode),
   setTranslucency: payload => ipcRenderer.send('hermes:translucency', payload),
+  // Surface operations
+  setTheme: payload => ipcRenderer.send('hermes:surface:theme', payload),
+  setAccentColor: payload => ipcRenderer.send('hermes:surface:accent-color', payload),
+  setWallpaper: payload => ipcRenderer.send('hermes:surface:wallpaper', payload),
+  setTransparency: payload => ipcRenderer.send('hermes:surface:transparency', payload),
   setKeepAwake: on => ipcRenderer.send('hermes:keep-awake', on),
   setDisableF12: blocked => ipcRenderer.send('hermes:devtools:disable-f12', blocked),
   setPreviewShortcutActive: active => ipcRenderer.send('hermes:previewShortcutActive', Boolean(active)),

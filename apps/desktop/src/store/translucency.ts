@@ -147,6 +147,23 @@ export function setTranslucencyScope(scope: GlassScope): void {
   edit({ scope: normalizeScope(scope) })
 }
 
+// Surface operations
+export function setTheme(mode: 'light' | 'dark' | 'system'): void {
+  window.hermesDesktop?.setTheme?.({ mode })
+}
+
+export function setAccentColor(color: string, source: 'user' | 'system' = 'user'): void {
+  window.hermesDesktop?.setAccentColor?.({ color, source })
+}
+
+export function setWallpaper(path: string, position: 'fill' | 'fit' | 'stretch' | 'tile' | 'center' = 'fill'): void {
+  window.hermesDesktop?.setWallpaper?.({ path, position })
+}
+
+export function setTransparency(enabled: boolean): void {
+  window.hermesDesktop?.setTransparency?.({ enabled })
+}
+
 // Glass thins surfaces only in real chat windows (the primary window and
 // secondary session windows). The HUD, pet overlay, quick entry and wake
 // indicator are transparent special-purpose windows that manage their own

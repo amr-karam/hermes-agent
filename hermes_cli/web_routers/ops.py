@@ -306,22 +306,27 @@ async def list_credential_pool():
     from hermes_cli.auth import read_credential_pool
 
     def _run():
-        providers = []
-        # read_credential_pool(None) lists every provider with pooled entries;
-        # load_pool() gives the rich PooledCredential objects per provider.
-        for provider_id in sorted(read_credential_pool().keys()):
-            try:
-                pool = load_pool(provider_id)
-            except Exception:
-                _log.exception("load_pool(%s) failed", provider_id)
-                continue
-            entries = pool.entries()
-            if entries:
-                providers.append({
-                    "provider": provider_id,
-                    "entries": [_pool_entry_summary(e, i) for i, e in enumerate(entries, start=1)],
-                })
-        return {"providers": providers}
+        from agent.secret_scope import build_profile_secret_scope, reset_secret_scope, set_secret_scope
+        secret_token = set_secret_scope(build_profile_secret_scope(get_hermes_home()))
+        try:
+            providers = []
+            # read_credential_pool(None) lists every provider with pooled entries;
+            # load_pool() gives the rich PooledCredential objects per provider.
+            for provider_id in sorted(read_credential_pool().keys()):
+                try:
+                    pool = load_pool(provider_id)
+                except Exception:
+                    _log.exception("load_pool(%s) failed", provider_id)
+                    continue
+                entries = pool.entries()
+                if entries:
+                    providers.append({
+                        "provider": provider_id,
+                        "entries": [_pool_entry_summary(e, i) for i, e in enumerate(entries, start=1)],
+                    })
+            return {"providers": providers}
+        finally:
+            reset_secret_scope(secret_token)
 
     return await asyncio.to_thread(_run)
 
@@ -343,43 +348,48 @@ async def add_credential_pool_entry(body: CredentialPoolAdd):
         raise HTTPException(status_code=400, detail="provider and api_key are required")
 
     def _run():
+        from agent.secret_scope import build_profile_secret_scope, reset_secret_scope, set_secret_scope
+        secret_token = set_secret_scope(build_profile_secret_scope(get_hermes_home()))
         try:
-            pool = load_pool(provider)
-            label = (body.label or "").strip() or f"key #{len(pool.entries()) + 1}"
-            pool.add_entry(PooledCredential(
-                provider=provider,
-                # Add a distinct, self-contained pool entry per account (matching the qwen-oauth /
-                # minimax-oauth multi-account patterns, and the xai-oauth path below) instead of routing
-                # through the singleton ``_save_codex_tokens`` save path. The singleton round-trip collapsed
-                # every added account into the latest login: a second ``hermes auth add openai-codex``
-                # overwrote the first account's singleton-mirrored ``device_code`` entry rather than
-                # creating an independent one (#39236). ``manual:device_code`` entries refresh from their
-                # own token pair, so they need no singleton shadow.
-                id=uuid.uuid4().hex[:6],
-                label=label,
-                auth_type=AUTH_TYPE_API_KEY,
-                priority=0,
-                source=SOURCE_MANUAL,
-                access_token=api_key,
-            ))
-            # Re-adding is an explicit re-engagement signal: lift every suppression
-            # for this provider so a source deleted earlier can seed again
-            # (mirrors `hermes auth add`).
-            if not provider.startswith(CUSTOM_POOL_PREFIX):
-                try:
-                    from hermes_cli.auth import _load_auth_store, unsuppress_credential_source
+            try:
+                pool = load_pool(provider)
+                label = (body.label or "").strip() or f"key #{len(pool.entries()) + 1}"
+                pool.add_entry(PooledCredential(
+                    provider=provider,
+                    # Add a distinct, self-contained pool entry per account (matching the qwen-oauth /
+                    # minimax-oauth multi-account patterns, and the xai-oauth path below) instead of routing
+                    # through the singleton ``_save_codex_tokens`` save path. The singleton round-trip collapsed
+                    # every added account into the latest login: a second ``hermes auth add openai-codex``
+                    # overwrote the first account's singleton-mirrored ``device_code`` entry rather than
+                    # creating an independent one (#39236). ``manual:device_code`` entries refresh from their
+                    # own token pair, so they need no singleton shadow.
+                    id=uuid.uuid4().hex[:6],
+                    label=label,
+                    auth_type=AUTH_TYPE_API_KEY,
+                    priority=0,
+                    source=SOURCE_MANUAL,
+                    access_token=api_key,
+                ))
+                # Re-adding is an explicit re-engagement signal: lift every suppression
+                # for this provider so a source deleted earlier can seed again
+                # (mirrors `hermes auth add`).
+                if not provider.startswith(CUSTOM_POOL_PREFIX):
+                    try:
+                        from hermes_cli.auth import _load_auth_store, unsuppress_credential_source
 
-                    suppressed = _load_auth_store().get("suppressed_sources", {})
-                    for src in list(suppressed.get(provider, []) or []):
-                        unsuppress_credential_source(provider, src)
-                except Exception:
-                    _log.exception("unsuppress after pool add failed (non-fatal)")
-            return {"ok": True, "provider": provider, "count": len(pool.entries())}
-        except HTTPException:
-            raise
-        except Exception as exc:
-            _log.exception("POST /api/credentials/pool failed")
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+                        suppressed = _load_auth_store().get("suppressed_sources", {})
+                        for src in list(suppressed.get(provider, []) or []):
+                            unsuppress_credential_source(provider, src)
+                    except Exception:
+                        _log.exception("unsuppress after pool add failed (non-fatal)")
+                return {"ok": True, "provider": provider, "count": len(pool.entries())}
+            except HTTPException:
+                raise
+            except Exception as exc:
+                _log.exception("POST /api/credentials/pool failed")
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+        finally:
+            reset_secret_scope(secret_token)
 
     return await asyncio.to_thread(_run)
 
@@ -404,34 +414,39 @@ async def remove_credential_pool_entry(provider: str, index: int):
     provider = (provider or "").strip().lower()
 
     def _run():
+        from agent.secret_scope import build_profile_secret_scope, reset_secret_scope, set_secret_scope
+        secret_token = set_secret_scope(build_profile_secret_scope(get_hermes_home()))
         try:
-            pool = load_pool(provider)
-            removed = pool.remove_index(index)
-        except Exception as exc:
-            _log.exception("DELETE /api/credentials/pool failed")
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        if removed is None:
-            raise HTTPException(status_code=404, detail="No pool entry at that index")
-
-        cleaned: List[str] = []
-        hints: List[str] = []
-        step = find_removal_step(provider, removed.source or "")
-        if step is not None:
             try:
-                result = step.remove_fn(provider, removed)
-                cleaned = list(result.cleaned)
-                hints = list(result.hints)
-                if result.suppress:
-                    suppress_credential_source(provider, removed.source)
-            except Exception:
-                # Cleanup is best-effort, but suppression is the actual fix —
-                # without it the entry resurrects on the next load_pool().
-                _log.exception("credential source cleanup failed for %s/%s; suppressing anyway", provider, removed.source)
+                pool = load_pool(provider)
+                removed = pool.remove_index(index)
+            except Exception as exc:
+                _log.exception("DELETE /api/credentials/pool failed")
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            if removed is None:
+                raise HTTPException(status_code=404, detail="No pool entry at that index")
+
+            cleaned: List[str] = []
+            hints: List[str] = []
+            step = find_removal_step(provider, removed.source or "")
+            if step is not None:
                 try:
-                    suppress_credential_source(provider, removed.source)
+                    result = step.remove_fn(provider, removed)
+                    cleaned = list(result.cleaned)
+                    hints = list(result.hints)
+                    if result.suppress:
+                        suppress_credential_source(provider, removed.source)
                 except Exception:
-                    _log.exception("suppress_credential_source failed")
-        return {"ok": True, "provider": provider, "count": len(pool.entries()), "cleaned": cleaned, "hints": hints}
+                    # Cleanup is best-effort, but suppression is the actual fix —
+                    # without it the entry resurrects on the next load_pool().
+                    _log.exception("credential source cleanup failed for %s/%s; suppressing anyway", provider, removed.source)
+                    try:
+                        suppress_credential_source(provider, removed.source)
+                    except Exception:
+                        _log.exception("suppress_credential_source failed")
+            return {"ok": True, "provider": provider, "count": len(pool.entries()), "cleaned": cleaned, "hints": hints}
+        finally:
+            reset_secret_scope(secret_token)
 
     return await asyncio.to_thread(_run)
 

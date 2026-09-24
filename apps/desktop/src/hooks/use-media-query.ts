@@ -20,8 +20,15 @@ export function useMediaQuery(query: string): boolean {
 
     setMatches(mql.matches)
     mql.addEventListener('change', onChange)
+    mql.addListener?.(onChange)
 
-    return () => mql.removeEventListener('change', onChange)
+    const interval = setInterval(() => setMatches(mql.matches), 3000)
+
+    return () => {
+      mql.removeEventListener('change', onChange)
+      mql.removeListener?.(onChange)
+      clearInterval(interval)
+    }
   }, [query])
 
   return matches

@@ -8,6 +8,7 @@ import { Codicon } from '@/components/ui/codicon'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { getGlobalModelOptions } from '@/hermes'
+import { prefersReducedMotion } from '@/hooks/use-media-query'
 import { useI18n } from '@/i18n'
 import { Check, ChevronDown, ChevronLeft, KeyRound, Loader2 } from '@/lib/icons'
 import { isSubmitEnter } from '@/lib/ime'
@@ -234,7 +235,7 @@ export function DesktopOnboardingOverlay({
       return
     }
 
-    const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    const reduce = prefersReducedMotion()
 
     if (reduce) {
       confirmOnboardingModel(ctx)
@@ -261,7 +262,7 @@ export function DesktopOnboardingOverlay({
       return
     }
 
-    const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    const reduce = prefersReducedMotion()
 
     if (reduce) {
       clearFreeTierIntro()

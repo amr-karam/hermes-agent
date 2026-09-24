@@ -219,7 +219,8 @@ export async function startIsolatedInstance({
         const viteBin = resolveViteBin()
         const vite = spawn(process.execPath, [viteBin, '--host', '127.0.0.1', '--port', String(devPort)], {
           cwd: DESKTOP_DIR,
-          stdio: ['ignore', 'inherit', 'inherit']
+          stdio: ['ignore', 'inherit', 'inherit'],
+          env: { ...process.env, HERMES_PERF: '1' }
         })
         children.push(vite)
         await waitFor(() => reachable(devUrl), { timeoutMs: 60000, label: `vite dev server on :${devPort}` })

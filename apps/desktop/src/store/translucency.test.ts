@@ -32,7 +32,11 @@ import {
   setTranslucencyScope,
   TRANSLUCENCY_MAX,
   TRANSLUCENCY_MIN,
-  TRANSLUCENCY_STEP
+  TRANSLUCENCY_STEP,
+  setTheme,
+  setAccentColor,
+  setWallpaper,
+  setTransparency,
 } from './translucency'
 
 const KEY = 'hermes.desktop.translucency.v2'
@@ -601,5 +605,58 @@ describe('v1 → v2 migration', () => {
 
     expect(fresh.$translucency.get().mode).toBe('glass')
     expect(fresh.$translucency.get().intensity).toBe(8)
+  })
+
+  // Surface operations IPC call tests
+  const calls: Record<string, unknown[]> = {}
+  const origWindow = window.hermesDesktop
+  beforeEach(() => {
+    for (const key of Object.keys(calls)) {
+      delete calls[key]
+    }
+    window.hermesDesktop = {
+      setTheme: (payload: unknown) => { calls.theme = [payload] },
+      setAccentColor: (payload: unknown) => { calls.accent = [payload] },
+      setWallpaper: (payload: unknown) => { calls.wallpaper = [payload] },
+      setTransparency: (payload: unknown) => { calls.transparency = [payload] }
+    } as unknown as Window & { hermesDesktop: Record<string, unknown> }
+  })
+  afterEach(() => {
+    window.hermesDesktop = origWindow
+  })
+
+  it('setTheme transmits mode via IPC', () => {
+    setTheme('light')
+    expect(calls.theme).toEqual([{ mode: 'light' }])
+
+    setTheme('dark')
+    expect(calls.theme).toEqual([{ mode: 'dark' }])
+
+    setTheme('system')
+    expect(calls.theme).toEqual([{ mode: 'system' }])
+  })
+
+  it('setAccentColor transmits color and source', () => {
+    setAccentColor('#0078d7')
+    expect(calls.accent).toEqual([{ color: '#0078d7', source: 'user' }])
+
+    setAccentColor('#ff0000', 'system')
+    expect(calls.accent).toEqual([{ color: '#ff0000', source: 'system' }])
+  })
+
+  it('setWallpaper transmits path and position', () => {
+    setWallpaper('C:\\Users\\test\\wallpaper.jpg')
+    expect(calls.wallpaper).toEqual([{ path: 'C:\\Users\\test\\wallpaper.jpg', position: 'fill' }])
+
+    setWallpaper('C:\\Users\\test\\wallpaper.jpg', 'fit')
+    expect(calls.wallpaper).toEqual([{ path: 'C:\\Users\\test\\wallpaper.jpg', position: 'fit' }])
+  })
+
+  it('setTransparency transmits enabled flag', () => {
+    setTransparency(true)
+    expect(calls.transparency).toEqual([{ enabled: true }])
+
+    setTransparency(false)
+    expect(calls.transparency).toEqual([{ enabled: false }])
   })
 })

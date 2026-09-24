@@ -1,5 +1,6 @@
 import { type ComponentProps, useEffect, useRef } from 'react'
 
+import { usePrefersReducedMotion } from '@/hooks/use-prefers-reduced-motion'
 import { createRendererLoopPauseController } from '@/lib/renderer-loop-pause'
 
 const PULSE_DURATION_MS = 400
@@ -95,13 +96,15 @@ export interface StatusPulseProps extends Omit<ComponentProps<'span'>, 'children
 export function StatusPulse({ kind, opacity = 1, ...props }: StatusPulseProps) {
   const ref = useRef<HTMLSpanElement>(null)
 
+  const reduceMotion = usePrefersReducedMotion()
+
   useEffect(() => {
     const element = ref.current
 
     if (
       !element ||
       typeof element.animate !== 'function' ||
-      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+      reduceMotion
     ) {
       return
     }
@@ -136,7 +139,7 @@ export function StatusPulse({ kind, opacity = 1, ...props }: StatusPulseProps) {
       unsubscribe()
       cancel()
     }
-  }, [kind, opacity])
+  }, [kind, opacity, reduceMotion])
 
   return <span {...props} ref={ref} />
 }

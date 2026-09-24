@@ -17268,6 +17268,52 @@ ipcMain.on('hermes:translucency', (_event, payload) => {
   }
 })
 
+// Surface operations (theme, accent, wallpaper, transparency)
+ipcMain.on('hermes:surface:theme', (_event, payload) => {
+  const { mode } = payload
+  const normalizedMode = mode === 'system' ? nativeTheme.themeSource : mode
+  if (!THEME_SOURCES.has(normalizedMode)) {
+    return
+  }
+
+  if (nativeTheme.themeSource !== normalizedMode) {
+    nativeTheme.themeSource = normalizedMode
+    writePersistedThemeSource(normalizedMode)
+  }
+})
+
+ipcMain.on('hermes:surface:accent-color', (_event, payload) => {
+  const { color, source } = payload
+  // Accent color would be applied via nativeTheme, but it's read-only.
+  // The renderer's value is kept in sync; main only acknowledges.
+  if (process.platform === 'win32') {
+    // Windows accent color can be set via registry, but it's a system-level setting
+    // beyond the scope of this basic surface bridge.
+  }
+})
+
+ipcMain.on('hermes:surface:wallpaper', (_event, payload) => {
+  const { path, position } = payload
+  if (!path) {
+    return
+  }
+  // Wallpaper setting is handled by the OS shell. For now, we acknowledge and
+  // log the intent; full wallpaper management would require additional APIs.
+  // Log intent for future implementation:
+  // - Validate the path exists
+  // - Apply via appropriate OS API (SystemParametersInfoW on Windows, etc.)
+})
+
+ipcMain.on('hermes:surface:transparency', (_event, payload) => {
+  const { enabled } = payload
+  if (enabled) {
+    // Enable per-window transparency - the existing translucency system handles this
+    // through the hermes:translucency IPC. We simply acknowledge here.
+  } else {
+    // Disable transparency / make windows opaque
+  }
+})
+
 // Keep-awake: hold the machine awake for long/overnight runs. Main owns the one
 // blocker and its persisted state so a cold launch restores it (applied on
 // ready — powerSaveBlocker needs the app ready). The renderer toggles it from

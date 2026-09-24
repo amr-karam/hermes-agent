@@ -1753,6 +1753,14 @@ export type { HermesGateway } from '@/hermes'
 /** Grab-to-pan for overflow containers (boards, timelines, wide tables) —
  *  the shared scrub primitive; don't hand-roll drag-to-scroll. */
 export { type GrabScroll, useGrabScroll } from '@/hooks/use-grab-scroll'
+/** OKLCH colour maths, for anything deriving a palette rather than hardcoding
+ *  one: perceptual conversion, the sRGB gamut boundary, and hue-stable
+ *  blending. `readableOn` is the SDK's public name for the desktop's ink pick
+ *  (`#161616` or `#ffffff`, whichever measures better on the background). */
+/** Returns the OS color scheme preference as 'dark' or 'light'. */
+export { usePrefersColorScheme } from '@/hooks/use-prefers-color-scheme'
+/** Returns whether the user prefers reduced motion. */
+export { usePrefersReducedMotion } from '@/hooks/use-prefers-reduced-motion'
 /** Localized copy. `useI18n` reuses the app's strings; `usePluginI18n(id)` +
  *  `ctx.i18n.register` let a plugin ship its OWN locale bundles, scoped like
  *  `ctx.storage` and resolved against the app's active locale — no core edit.
@@ -1811,13 +1819,6 @@ export { LruCache } from '@/lib/lru-cache'
  *  hand-picked color still sits with the generated ones; reach for them
  *  instead of literal hex, which can't follow the theme. */
 export { PROFILE_SWATCHES, profileColor, profileColorSoft } from '@/lib/profile-color'
-/** The shared client itself, for invalidation OUTSIDE React (e.g. a
- *  `ctx.socket` frame invalidating a query). Inside components keep using
- *  `useQueryClient`. */
-export { queryClient } from '@/lib/query-client'
-/** Compact labels for the reasoning levels exported from @hermes/shared, so a
- *  plugin surfacing a thinking depth uses the same spelling as the app. */
-export { reasoningEffortLabel } from '@/lib/reasoning-effort'
 
 export const PANES_AREA = 'panes'
 export const STATUSBAR_AREAS = { left: 'statusBar.left', right: 'statusBar.right' } as const
@@ -1827,6 +1828,13 @@ export const STATUSBAR_AREAS = { left: 'statusBar.left', right: 'statusBar.right
  *  should exist only while a page is up go to `WORKSPACE_PAGE_HEADER_AREA`. */
 export const TITLEBAR_AREAS = { center: 'titleBar.center', left: 'titleBar.left', right: 'titleBar.right' } as const
 
+/** The shared client itself, for invalidation OUTSIDE React (e.g. a
+ *  `ctx.socket` frame invalidating a query). Inside components keep using
+ *  `useQueryClient`. */
+export { queryClient } from '@/lib/query-client'
+/** Compact labels for the reasoning levels exported from @hermes/shared, so a
+ *  plugin surfacing a thinking depth uses the same spelling as the app. */
+export { reasoningEffortLabel } from '@/lib/reasoning-effort'
 /** The app's own gateway-readiness evaluation (setup.status +
  *  setup.runtime_check, reconciled) — pass `host.request`. Don't hand-roll
  *  readiness from raw RPC shapes. */
@@ -1864,10 +1872,6 @@ export { ackStoredSessionId, forgetSessionUnread, markSessionUnreadFinished } fr
  *  authored palette. Deliberately not persisted: it is an authoring knob, not
  *  a setting, so a plugin that sets it must clear it on dispose. */
 export { $accentOverride, setAccentOverride } from '@/themes/accent-override'
-/** OKLCH colour maths, for anything deriving a palette rather than hardcoding
- *  one: perceptual conversion, the sRGB gamut boundary, and hue-stable
- *  blending. `readableOn` is the SDK's public name for the desktop's ink pick
- *  (`#161616` or `#ffffff`, whichever measures better on the background). */
 export {
   hexToOklch,
   hueDelta,

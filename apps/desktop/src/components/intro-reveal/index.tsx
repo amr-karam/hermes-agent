@@ -2,6 +2,7 @@ import { useStore } from '@nanostores/react'
 import { useEffect } from 'react'
 
 import { takeGuideShape } from '@/components/onboarding-chat/assembly'
+import { usePrefersReducedMotion } from '@/hooks/use-prefers-reduced-motion'
 import {
   $introReveal,
   finishIntroReveal,
@@ -24,7 +25,7 @@ interface IntroRevealGateProps {
 export function IntroRevealGate({ enabled }: IntroRevealGateProps) {
   const onboarding = useStore($desktopOnboarding)
   const intro = useStore($introReveal)
-  const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  const reduceMotion = usePrefersReducedMotion()
 
   useEffect(() => {
     if (enabled && isIntroRevealEnabled()) {

@@ -692,35 +692,40 @@ def _feature_state(feat) -> str:
 
 
 def _get_portal_status_sync():
-    cfg = load_config() or {}
-    auth: Dict[str, Any] = {}
+    from agent.secret_scope import build_profile_secret_scope, reset_secret_scope, set_secret_scope
+    secret_token = set_secret_scope(build_profile_secret_scope(get_hermes_home()))
     try:
-        from hermes_cli.auth import get_nous_auth_status_local
-        # Refresh-free snapshot so polling never performs an OAuth refresh.
-        auth = get_nous_auth_status_local() or {}
-    except Exception:
-        auth = {}
+        cfg = load_config() or {}
+        auth: Dict[str, Any] = {}
+        try:
+            from hermes_cli.auth import get_nous_auth_status_local
+            # Refresh-free snapshot so polling never performs an OAuth refresh.
+            auth = get_nous_auth_status_local() or {}
+        except Exception:
+            auth = {}
 
-    features = []
-    try:
-        from hermes_cli.nous_subscription import get_nous_subscription_features
-        feats = get_nous_subscription_features(cfg)
-        if feats is not None:
-            features = [{"label": getattr(feat, "label", ""), "state": _feature_state(feat)}
-                        for feat in feats.items()]
-    except Exception:
-        _log.exception("portal features failed")
+        features = []
+        try:
+            from hermes_cli.nous_subscription import get_nous_subscription_features
+            feats = get_nous_subscription_features(cfg)
+            if feats is not None:
+                features = [{"label": getattr(feat, "label", ""), "state": _feature_state(feat)}
+                            for feat in feats.items()]
+        except Exception:
+            _log.exception("portal features failed")
 
-    model_cfg = cfg.get("model") if isinstance(cfg.get("model"), dict) else {}
-    return {
-        "logged_in": bool(auth.get("logged_in")), "portal_url": auth.get("portal_base_url"),
-        "inference_url": auth.get("inference_base_url"),
-        "provider": str((model_cfg or {}).get("provider") or ""),
+        model_cfg = cfg.get("model") if isinstance(cfg.get("model"), dict) else {}
+        return {
+            "logged_in": bool(auth.get("logged_in")), "portal_url": auth.get("portal_base_url"),
+            "inference_url": auth.get("inference_base_url"),
+            "provider": str((model_cfg or {}).get("provider") or ""),
         # Free tier: a token exists, so logged_in stays true for callers that only ask "is there a
         # credential"; surfaces that render an account must branch on free_tier first.
         "free_tier": bool(auth.get("free_tier")), "account_tier": auth.get("account_tier"),
-        "subscription_url": "https://portal.nousresearch.com/manage-subscription",
-        "features": features}
+            "subscription_url": "https://portal.nousresearch.com/manage-subscription",
+            "features": features}
+    finally:
+        reset_secret_scope(secret_token)
 
 
 # Diagnostics: text-output actions spawned in the background, tailed via /api/actions/<name>.

@@ -197,6 +197,34 @@ async def test_list_credential_pool_runs_off_event_loop(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_list_credential_pool_with_multiplex_active(_isolate_hermes_home, monkeypatch):
+    """Regression for the dashboard-poll bug: when multiplexing is on (the GUI
+    web-server context), the credential-pool endpoint must install a profile
+    secret scope before calling load_pool(), otherwise get_secret() raises
+    UnscopedSecretError for every provider.
+    """
+    import agent.secret_scope as ss
+    import hermes_cli.auth as auth_mod
+    from hermes_cli.config import save_env_value
+
+    fake_key = "sk-or-" + "x" * 20
+    save_env_value("OPENROUTER_API_KEY", fake_key)
+
+    def fake_read_pool(provider=None, *a, **kw):
+        return {"openrouter": []} if provider is None else []
+
+    monkeypatch.setattr(auth_mod, "read_credential_pool", fake_read_pool)
+
+    ss.set_multiplex_active(True)
+    try:
+        result = await _rt_ops.list_credential_pool()
+        assert "providers" in result
+        assert any(p["provider"] == "openrouter" for p in result["providers"])
+    finally:
+        ss.set_multiplex_active(False)
+
+
+@pytest.mark.asyncio
 async def test_list_credential_pool_keeps_loop_responsive(monkeypatch):
     """A 200 ms blocking pool read must not freeze a concurrent ticker."""
     import hermes_cli.auth as auth_mod

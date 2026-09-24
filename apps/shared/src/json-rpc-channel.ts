@@ -439,7 +439,9 @@ export class JsonRpcRequestChannel {
 
     if (frame.id !== undefined && frame.id !== null) {
       if (typeof frame.id === 'string' && this.outstandingPings.delete(frame.id)) {
-        this.lastLivenessAt = Date.now()
+        if (this.options.heartbeatLiveness !== 'any-inbound') {
+          this.lastLivenessAt = Date.now()
+        }
 
         return frame
       }
@@ -447,7 +449,9 @@ export class JsonRpcRequestChannel {
       const call = this.pending.get(frame.id)
 
       if (call) {
-        this.lastLivenessAt = Date.now()
+        if (this.options.heartbeatLiveness !== 'any-inbound') {
+          this.lastLivenessAt = Date.now()
+        }
         this.clearPending(frame.id)
 
         if (frame.error) {
