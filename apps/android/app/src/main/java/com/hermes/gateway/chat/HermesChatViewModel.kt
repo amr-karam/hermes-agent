@@ -21,18 +21,20 @@ class HermesChatViewModel(application: Application) : AndroidViewModel(applicati
     val inputText: StateFlow<String> = _inputText.asStateFlow()
 
     init {
-        channel.connect()
-        channel.connectionState.collect { state ->
-            _connectionState.value = when (state) {
-                ConnectionState.Open -> ConnectionState.Open
-                ConnectionState.Connecting -> ConnectionState.Connecting
-                ConnectionState.Closed -> ConnectionState.Closed
-                ConnectionState.Error -> ConnectionState.Error
-                else -> ConnectionState.Closed
+        viewModelScope.launch {
+            channel.connect()
+            channel.connectionState.collect { state ->
+                _connectionState.value = when (state) {
+                    ConnectionState.Open -> ConnectionState.Open
+                    ConnectionState.Connecting -> ConnectionState.Connecting
+                    ConnectionState.Closed -> ConnectionState.Closed
+                    ConnectionState.Error -> ConnectionState.Error
+                    else -> ConnectionState.Closed
+                }
             }
-        }
-        channel.messages.collect { messages ->
-            _messages.value = messages
+            channel.messages.collect { messages ->
+                _messages.value = messages
+            }
         }
     }
 

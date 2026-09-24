@@ -59,7 +59,7 @@ class JsonRpcChannel(
                         val result = json["result"]
                         val error = json["error"]
                         if (error != null) {
-                            _connectionState.postValue(ConnectionState.Error)
+                            _connectionState.value = ConnectionState.Error
                             return@launch
                         }
                         val payload = result?.jsonObject
@@ -71,7 +71,7 @@ class JsonRpcChannel(
             override fun onMessage(webSocket: WebSocket, bytes: ByteString) {}
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: okhttp3.Response?) {
-                _connectionState.postValue(ConnectionState.Error)
+                _connectionState.value = ConnectionState.Error
                 webSocket.close(1000, null)
                 webSocket = null
                 coroutineScope.launch {
@@ -81,11 +81,11 @@ class JsonRpcChannel(
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                _connectionState.postValue(ConnectionState.Closed)
+                _connectionState.value = ConnectionState.Closed
                 webSocket = null
             }
         })
-        _connectionState.postValue(ConnectionState.Connecting)
+        _connectionState.value = ConnectionState.Connecting
     }
 
     fun disconnect() {
