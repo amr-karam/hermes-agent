@@ -1,7 +1,8 @@
 import type { EventEmitter } from 'node:events'
 
-interface RetainedNotification extends EventEmitter {
+export interface RetainedNotification extends EventEmitter {
   close: () => void
+  show: () => Promise<boolean>
 }
 
 // Windows emits close on banner timeout even while Action Center keeps the

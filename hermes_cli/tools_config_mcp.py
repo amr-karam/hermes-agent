@@ -126,11 +126,13 @@ def _configure_mcp_tools_interactive(config: dict):
         exclude_set = {str(p) for p in exclude_raw or []} or None
 
         labels = []
-        for tool_name, description in tools:
+        for t in tools:
+            tool_name = t["name"]
+            description = t.get("description", "")
             desc_short = description[:70] + "..." if len(description) > 70 else description
             labels.append(f"{tool_name}  ({desc_short})" if desc_short else tool_name)
         match = _mcp_match_filter()
-        tool_names = [t[0] for t in tools]
+        tool_names = [t["name"] for t in tools]
         pre_selected = _mcp_preselected(tool_names, include_set, exclude_set, match)
 
         chosen = curses_checklist(

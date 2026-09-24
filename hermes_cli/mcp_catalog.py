@@ -50,7 +50,13 @@ class AuthSpec:
 
 
 # ``auth.oauth`` keys a manifest may pin; everything else is a user-side tuning knob.
-_MANIFEST_OAUTH_KEYS = frozenset({"client_id", "client_secret", "redirect_host", "redirect_port", "scope"})
+_MANIFEST_OAUTH_KEYS = frozenset({
+    "client_id",
+    "client_secret",
+    "redirect_host",
+    "redirect_port",
+    "scope",
+})
 _ENV_REF_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
 
@@ -69,6 +75,7 @@ class TransportSpec:
 @dataclass
 class InstallSpec:
     """Optional bootstrap step (git clone + dep install)."""
+
     type: str  # "git"
     url: str
     ref: str  # commit/tag/branch — pinned, never floats
@@ -97,11 +104,21 @@ class SuggestSpec:
     per-host OAuth app (generic DCR 404s) and the bundled github/* skills are far more capable.
     """
 
-    keywords: List[str] = field(default_factory=list)  # lowercase whole-word/phrase triggers
-    hosts: List[str] = field(default_factory=list)  # hostname suffixes ("atlassian.net")
-    applications: List[str] = field(default_factory=list)  # reviewed local app labels/aliases
-    examples: List[str] = field(default_factory=list)  # capability examples, not executable instructions
-    requires_app: bool = False  # local app prerequisite, unlike cloud services with desktop clients
+    keywords: List[str] = field(
+        default_factory=list
+    )  # lowercase whole-word/phrase triggers
+    hosts: List[str] = field(
+        default_factory=list
+    )  # hostname suffixes ("atlassian.net")
+    applications: List[str] = field(
+        default_factory=list
+    )  # reviewed local app labels/aliases
+    examples: List[str] = field(
+        default_factory=list
+    )  # capability examples, not executable instructions
+    requires_app: bool = (
+        False  # local app prerequisite, unlike cloud services with desktop clients
+    )
 
 
 @dataclass
@@ -135,8 +152,12 @@ def _parse_env_spec(raw: Any) -> EnvVarSpec:
     if not name or not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", name):
         raise CatalogError(f"invalid env var name: {name!r}")
     return EnvVarSpec(
-        name=name, prompt=raw.get("prompt") or name, required=bool(raw.get("required", True)),
-        secret=bool(raw.get("secret", True)), default=str(raw.get("default") or ""))
+        name=name,
+        prompt=raw.get("prompt") or name,
+        required=bool(raw.get("required", True)),
+        secret=bool(raw.get("secret", True)),
+        default=str(raw.get("default") or ""),
+    )
 
 
 def _require_mapping(path: Path, key: str, raw: Any) -> dict:
@@ -151,8 +172,12 @@ def _require_list(path: Path, field: str, raw: Any) -> list:
     return raw
 
 
-def _require_str_list(path: Path, field: str, raw: Any, *, non_empty: bool = False) -> None:
-    ok = isinstance(raw, list) and all(isinstance(t, str) and (t.strip() if non_empty else True) for t in raw)
+def _require_str_list(
+    path: Path, field: str, raw: Any, *, non_empty: bool = False
+) -> None:
+    ok = isinstance(raw, list) and all(
+        isinstance(t, str) and (t.strip() if non_empty else True) for t in raw
+    )
     if not ok:
         kind = "non-empty strings" if non_empty else "strings"
         raise CatalogError(f"{path}: {field} must be a list of {kind}")
@@ -168,10 +193,17 @@ def _parse_transport(path: Path, raw: Any) -> TransportSpec:
     if not isinstance(env_raw, dict) or not all(
         isinstance(k, str) and isinstance(v, str) for k, v in env_raw.items()
     ):
-        raise CatalogError(f"{path}: transport.env must be a mapping of string to string")
+        raise CatalogError(
+            f"{path}: transport.env must be a mapping of string to string"
+        )
     transport = TransportSpec(
-        type=t_type, command=transport_raw.get("command"), args=[str(a) for a in args],
-        url=transport_raw.get("url"), version=transport_raw.get("version"), env=dict(env_raw))
+        type=t_type,
+        command=transport_raw.get("command"),
+        args=[str(a) for a in args],
+        url=transport_raw.get("url"),
+        version=transport_raw.get("version"),
+        env=dict(env_raw),
+    )
     if t_type == "stdio" and not transport.command:
         raise CatalogError(f"{path}: stdio transport requires 'command'")
     if t_type == "http" and not transport.url:
@@ -184,7 +216,10 @@ def _parse_auth(path: Path, raw: Any, name: str, http: bool) -> AuthSpec:
     a_type = auth_raw.get("type") or "none"
     if a_type not in ("api_key", "oauth", "none"):
         raise CatalogError(f"{path}: auth.type must be 'api_key'|'oauth'|'none'")
-    env_list = [_parse_env_spec(e) for e in _require_list(path, "auth.env", auth_raw.get("env") or [])]
+    env_list = [
+        _parse_env_spec(e)
+        for e in _require_list(path, "auth.env", auth_raw.get("env") or [])
+    ]
     if http and a_type == "api_key":
         # _build_server_config emits an Authorization header referencing ${MCP_<NAME>_API_KEY}, but
         # install_entry only persists the env vars DECLARED in auth.env. Enforce the naming contract
@@ -202,7 +237,9 @@ def _parse_auth(path: Path, raw: Any, name: str, http: bool) -> AuthSpec:
         raise CatalogError(f"{path}: auth.oauth is only valid with auth.type 'oauth'")
     oauth = _require_mapping(path, "auth.oauth", oauth_raw)
     unknown = sorted(set(oauth) - _MANIFEST_OAUTH_KEYS)
-    if unknown or not all(isinstance(v, (str, int)) and not isinstance(v, bool) for v in oauth.values()):
+    if unknown or not all(
+        isinstance(v, (str, int)) and not isinstance(v, bool) for v in oauth.values()
+    ):
         raise CatalogError(
             f"{path}: auth.oauth allows string/int values for {sorted(_MANIFEST_OAUTH_KEYS)} only"
             + (f" (unknown: {unknown})" if unknown else "")
@@ -210,23 +247,43 @@ def _parse_auth(path: Path, raw: Any, name: str, http: bool) -> AuthSpec:
     # Same contract as api_key headers: install_entry persists only DECLARED env vars, so an
     # undeclared ``${VAR}`` would reach the OAuth flow as a literal placeholder (invalid_client).
     declared = {spec.name for spec in env_list}
-    undeclared = sorted({ref for v in oauth.values() if isinstance(v, str) for ref in _ENV_REF_RE.findall(v)} - declared)
+    undeclared = sorted(
+        {
+            ref
+            for v in oauth.values()
+            if isinstance(v, str)
+            for ref in _ENV_REF_RE.findall(v)
+        }
+        - declared
+    )
     if undeclared:
-        raise CatalogError(f"{path}: auth.oauth references env vars not declared in auth.env: {undeclared}")
+        raise CatalogError(
+            f"{path}: auth.oauth references env vars not declared in auth.env: {undeclared}"
+        )
     return AuthSpec(
-        type=a_type, env=env_list, provider=auth_raw.get("provider"),
-        scopes=list(auth_raw.get("scopes") or []), env_var=auth_raw.get("env_var"), oauth=dict(oauth))
+        type=a_type,
+        env=env_list,
+        provider=auth_raw.get("provider"),
+        scopes=list(auth_raw.get("scopes") or []),
+        env_var=auth_raw.get("env_var"),
+        oauth=dict(oauth),
+    )
 
 
 def _parse_tools(path: Path, raw: Any) -> ToolsSpec:
     tools_raw = _require_mapping(path, "tools", raw or {})
     default_enabled = tools_raw.get("default_enabled")
     default_excluded = tools_raw.get("default_excluded")
-    for key, val in (("default_enabled", default_enabled), ("default_excluded", default_excluded)):
+    for key, val in (
+        ("default_enabled", default_enabled),
+        ("default_excluded", default_excluded),
+    ):
         if val is not None:
             _require_str_list(path, f"tools.{key}", val)
     if default_enabled is not None and default_excluded is not None:
-        raise CatalogError(f"{path}: tools.default_enabled and tools.default_excluded are mutually exclusive")
+        raise CatalogError(
+            f"{path}: tools.default_enabled and tools.default_excluded are mutually exclusive"
+        )
     return ToolsSpec(default_enabled=default_enabled, default_excluded=default_excluded)
 
 
@@ -247,17 +304,26 @@ def _parse_suggest(path: Path, suggest_raw: Any) -> Optional[SuggestSpec]:
     examples = suggest_raw.get("examples", [])
     _require_str_list(path, "suggest.examples", examples, non_empty=True)
     if len(examples) > 6 or any(len(e) > 240 or not e.isprintable() for e in examples):
-        raise CatalogError(f"{path}: suggest.examples allows at most 6 single-line examples of 240 characters")
+        raise CatalogError(
+            f"{path}: suggest.examples allows at most 6 single-line examples of 240 characters"
+        )
     requires_app = suggest_raw.get("requires_app", False)
     if not isinstance(requires_app, bool) or (requires_app and not applications):
-        raise CatalogError(f"{path}: suggest.requires_app must be a boolean, with applications when true")
+        raise CatalogError(
+            f"{path}: suggest.requires_app must be a boolean, with applications when true"
+        )
     if not kw_raw and not hosts_raw and not applications:
-        raise CatalogError(f"{path}: 'suggest' requires at least one keyword, host or application")
+        raise CatalogError(
+            f"{path}: 'suggest' requires at least one keyword, host or application"
+        )
     # Matching is case-insensitive whole-word / host-suffix: store lowercase so UIs needn't re-normalize.
     return SuggestSpec(
         keywords=[k.strip().lower() for k in kw_raw],
         hosts=[h.strip().lower().lstrip(".") for h in hosts_raw],
-        applications=applications, examples=examples, requires_app=requires_app)
+        applications=applications,
+        examples=examples,
+        requires_app=requires_app,
+    )
 
 
 def _parse_connector_slug(path: Path, value: Any) -> Optional[str]:
@@ -278,8 +344,12 @@ def _parse_install(path: Path, install_raw: Any) -> Optional[InstallSpec]:
     url, ref = install_raw.get("url") or "", install_raw.get("ref") or ""
     if not url or not ref:
         raise CatalogError(f"{path}: install.url and install.ref are required")
-    bootstrap = _require_list(path, "install.bootstrap", install_raw.get("bootstrap") or [])
-    return InstallSpec(type=i_type, url=url, ref=ref, bootstrap=[str(c) for c in bootstrap])
+    bootstrap = _require_list(
+        path, "install.bootstrap", install_raw.get("bootstrap") or []
+    )
+    return InstallSpec(
+        type=i_type, url=url, ref=ref, bootstrap=[str(c) for c in bootstrap]
+    )
 
 
 def _parse_manifest(path: Path) -> CatalogEntry:
@@ -313,9 +383,17 @@ def _parse_manifest(path: Path) -> CatalogEntry:
     connector_slug = _parse_connector_slug(path, data.get("connector_slug"))
     install = _parse_install(path, data.get("install"))
     return CatalogEntry(
-        name=name, description=description, source=str(data.get("source") or "").strip(),
-        transport=transport, auth=auth, connector_slug=connector_slug, tools=tools, install=install,
-        post_install=str(data.get("post_install") or ""), suggest=suggest, manifest_path=path,
+        name=name,
+        description=description,
+        source=str(data.get("source") or "").strip(),
+        transport=transport,
+        auth=auth,
+        connector_slug=connector_slug,
+        tools=tools,
+        install=install,
+        post_install=str(data.get("post_install") or ""),
+        suggest=suggest,
+        manifest_path=path,
     )
 
 
@@ -344,7 +422,11 @@ def list_catalog() -> List[CatalogEntry]:
         except CatalogError as exc:
             msg = str(exc)
             future = "manifest_version" in msg and "unsupported" in msg
-            _CATALOG_DIAGNOSTICS.append((child.name, "future_manifest" if future else "invalid", msg))
+            _CATALOG_DIAGNOSTICS.append((
+                child.name,
+                "future_manifest" if future else "invalid",
+                msg,
+            ))
     return entries
 
 
@@ -357,7 +439,7 @@ def catalog_diagnostics() -> List[tuple]:
 def get_entry(name: str) -> Optional[CatalogEntry]:
     """Look up a single entry by name. ``official/<name>`` prefix accepted."""
     if name.startswith("official/"):
-        name = name[len("official/"):]
+        name = name[len("official/") :]
     return next((e for e in list_catalog() if e.name == name), None)
 
 
@@ -419,7 +501,9 @@ def _do_git_install(entry: CatalogEntry) -> Path:
 
     git = shutil.which("git")
     if not git:
-        raise CatalogError("git is required to install this MCP but was not found on PATH")
+        raise CatalogError(
+            "git is required to install this MCP but was not found on PATH"
+        )
     if dest.exists():
         # Fresh checkout each install — the manifest ref is the source of truth.
         _say(f"  Removing existing install at {dest}", Colors.DIM)
@@ -434,13 +518,25 @@ def _do_git_install(entry: CatalogEntry) -> Path:
 
     def _git(*args: str) -> int:
         result = run_git_with_credential_fallback(
-            [git, *args], install.url, env=noninteractive_git_env(),
-            capture_output=True, text=True, encoding="utf-8", errors="replace")
+            [git, *args],
+            install.url,
+            env=noninteractive_git_env(),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
         if result.returncode != 0 and (result.stderr or "").strip():
             _say(result.stderr.strip(), Colors.DIM)
         return result.returncode
 
-    if not is_sha_ref and _git("clone", "--depth", "1", "--branch", install.ref, install.url, str(dest)) != 0:
+    if (
+        not is_sha_ref
+        and _git(
+            "clone", "--depth", "1", "--branch", install.ref, install.url, str(dest)
+        )
+        != 0
+    ):
         # Branch/tag form failed (e.g. ref deleted upstream): fall through to full-clone path.
         if dest.exists():
             rmtree_readonly(dest)
@@ -460,11 +556,15 @@ def _expand_install_dir(value: str, install_dir: Optional[Path]) -> str:
     if _INSTALL_DIR_VAR not in value:
         return value
     if install_dir is None:
-        raise CatalogError(f"manifest references {_INSTALL_DIR_VAR} but no install block exists")
+        raise CatalogError(
+            f"manifest references {_INSTALL_DIR_VAR} but no install block exists"
+        )
     return value.replace(_INSTALL_DIR_VAR, str(install_dir))
 
 
-def _prompt_env_vars(specs: List[EnvVarSpec], preloaded: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+def _prompt_env_vars(
+    specs: List[EnvVarSpec], preloaded: Optional[Dict[str, str]] = None
+) -> Dict[str, str]:
     """Prompt for each env spec.
 
     Secrets persist to ~/.hermes/.env. Non-secrets are only collected and
@@ -484,7 +584,9 @@ def _prompt_env_vars(specs: List[EnvVarSpec], preloaded: Optional[Dict[str, str]
             _say(f"  ✓ {spec.name} already set in .env")
             collected[spec.name] = existing
             continue
-        value = _prompt_input(spec.prompt, default=spec.default or None, password=spec.secret)
+        value = _prompt_input(
+            spec.prompt, default=spec.default or None, password=spec.secret
+        )
         if value:
             if spec.secret:
                 save_env_value(spec.name, value)
@@ -547,17 +649,20 @@ def _read_prior_tool_list(name: str, key: str) -> Optional[List[str]]:
     return list(value) if ok else None
 
 
-def _probe_tools(name: str) -> Optional[List[tuple]]:
+def _probe_tools(name: str) -> Optional[List[Dict[str, Any]]]:
     """Connect to a freshly-configured MCP and list its tools.
 
-    ``(tool_name, description)`` tuples on success, ``None`` on any failure (unreachable, OAuth not
-    yet completed, ...). Failures are swallowed here; :func:`_apply_tool_selection` handles them.
+    List of ``{name, description, inputSchema}`` dicts on success, ``None`` on any
+    failure (unreachable, OAuth not yet completed, ...). Failures are swallowed here;
+    :func:`_apply_tool_selection` handles them.
     """
     server_cfg = installed_servers().get(name)
     if not server_cfg:
         return None
     try:
-        from hermes_cli.mcp_config import _probe_single_server  # lazy: keep this module cheap
+        from hermes_cli.mcp_config import (
+            _probe_single_server,
+        )  # lazy: keep this module cheap
 
         tools = _probe_single_server(name, server_cfg)
         return list(tools) if tools is not None else []
@@ -590,7 +695,8 @@ def _apply_tool_selection(
     entry: CatalogEntry,
     *,
     prior_selection: Optional[List[str]],
-    prior_exclude: Optional[List[str]] = None) -> None:
+    prior_exclude: Optional[List[str]] = None,
+) -> None:
     """Probe the server and let the user pick which tools to enable.
 
     Probe-success: curses checklist; pre-check priority *prior_selection* (reinstall) > manifest
@@ -608,7 +714,9 @@ def _apply_tool_selection(
         edit_hint = f"Edit mcp_servers.{name}.tools.exclude in config.yaml or run {configure_hint} to change."
         if prior_exclude is not None:
             _write_tools_filter(name, "exclude", prior_exclude)
-            _say(f"  Kept your existing exclude list ({len(prior_exclude)} entries). {edit_hint}")
+            _say(
+                f"  Kept your existing exclude list ({len(prior_exclude)} entries). {edit_hint}"
+            )
             return
         _write_tools_filter(name, "exclude", entry.tools.default_excluded)
         _say(
@@ -652,19 +760,30 @@ def _apply_tool_selection(
         _say("  Server reported no tools.", Colors.YELLOW)
         return
 
-    tool_names = [t[0] for t in probed]
+    tool_names = [t["name"] for t in probed]
 
     # Non-TTY: skip the checklist; same priority as the interactive pre-check.
     import sys as _sys
+
     if not _sys.stdin.isatty():
-        preferred = prior_selection if prior_selection is not None else (entry.tools.default_enabled or None)
+        preferred = (
+            prior_selection
+            if prior_selection is not None
+            else (entry.tools.default_enabled or None)
+        )
         _write_tools_filter(
-            name, "include", None if preferred is None else [n for n in preferred if n in tool_names]
+            name,
+            "include",
+            None if preferred is None else [n for n in preferred if n in tool_names],
         )
         return
 
     # A prior ``include: []`` (user chose zero tools) outranks manifest defaults, like the non-TTY path.
-    preferred = prior_selection if prior_selection is not None else (entry.tools.default_enabled or tool_names)
+    preferred = (
+        prior_selection
+        if prior_selection is not None
+        else (entry.tools.default_enabled or tool_names)
+    )
     pre_set = {n for n in preferred if n in tool_names}
     pre_indices = {i for i, n in enumerate(tool_names) if n in pre_set}
     _say(f"  Found {len(probed)} tool(s). Pre-checked: {len(pre_indices)}.")
@@ -673,7 +792,8 @@ def _apply_tool_selection(
 
     labels = [f"{n}  —  {(d[:60] + '...') if len(d) > 60 else d}" for n, d in probed]
     chosen_indices = curses_checklist(
-        f"Select tools for '{name}' (SPACE toggle, ENTER confirm)", labels, pre_indices)
+        f"Select tools for '{name}' (SPACE toggle, ENTER confirm)", labels, pre_indices
+    )
     if not chosen_indices:
         # Everything unchecked: write an empty include so the server is installed but contributes
         # nothing until reconfigured.
@@ -718,7 +838,12 @@ def card_install_config(entry: CatalogEntry) -> dict:
     return cfg
 
 
-def install_entry(entry: CatalogEntry, *, enable: bool = True, preloaded_env: Optional[Dict[str, str]] = None) -> None:
+def install_entry(
+    entry: CatalogEntry,
+    *,
+    enable: bool = True,
+    preloaded_env: Optional[Dict[str, str]] = None,
+) -> None:
     """Install a catalog entry end-to-end.
 
     Order: git clone + bootstrap (if any); credential prompts (``auth.env``) to .env; write
@@ -750,13 +875,19 @@ def install_entry(entry: CatalogEntry, *, enable: bool = True, preloaded_env: Op
             f"  This MCP uses {entry.auth.provider} OAuth. Run "
             f"`hermes auth {entry.auth.provider}` if you have not "
             "already authenticated.",
-            Colors.YELLOW)
+            Colors.YELLOW,
+        )
     elif entry.auth.type == "oauth":
-        client = "your pre-registered OAuth client" if entry.auth.oauth.get("client_id") else "native OAuth 2.1"
+        client = (
+            "your pre-registered OAuth client"
+            if entry.auth.oauth.get("client_id")
+            else "native OAuth 2.1"
+        )
         _say(
             f"  This MCP uses {client}; tokens will be acquired "
             "on first connection (browser flow).",
-            Colors.DIM)
+            Colors.DIM,
+        )
 
     # Read prior user selection BEFORE overwriting the entry so a reinstall preserves it.
     prior_selection = _read_prior_tool_list(entry.name, "include")
@@ -767,15 +898,21 @@ def install_entry(entry: CatalogEntry, *, enable: bool = True, preloaded_env: Op
     # refs so the raw file never carries credentials (resolved from .env at load).
     for spec in entry.auth.env:
         if not spec.secret and spec.name in env_values:
-            server_cfg = _inline_non_secret_value(server_cfg, spec.name, env_values[spec.name])
+            server_cfg = _inline_non_secret_value(
+                server_cfg, spec.name, env_values[spec.name]
+            )
     server_cfg["enabled"] = enable
 
     from hermes_cli.mcp_config import _save_mcp_server
 
     if not _save_mcp_server(entry.name, server_cfg):
-        raise CatalogError(f"catalog entry '{entry.name}' rejected: suspicious command/args configuration")
+        raise CatalogError(
+            f"catalog entry '{entry.name}' rejected: suspicious command/args configuration"
+        )
 
-    _apply_tool_selection(entry, prior_selection=prior_selection, prior_exclude=prior_exclude)
+    _apply_tool_selection(
+        entry, prior_selection=prior_selection, prior_exclude=prior_exclude
+    )
 
     print()
     _say(

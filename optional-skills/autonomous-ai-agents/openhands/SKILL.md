@@ -25,6 +25,8 @@ This skill is the headless-mode wrapper for batch / one-shot delegation. The int
 
 For Claude-native, prefer `claude-code`. For OpenAI-native, prefer `codex`. For Hermes-native subagents, use `delegate_task`.
 
+**Alternative: Hermes MCP Bridge.** Instead of invoking the CLI through `terminal`, the bundled [`optional-mcps/openhands/server.py`](https://github.com/NousResearch/hermes-agent/optional-mcps/openhands) MCP server calls the OpenHands Agent Server REST API directly (requires `openhands-agent-server >= 1.49.3` running locally). This gives finer-grained tool control (conversations, file I/O, bash, events) with retry/circuit-breaker resilience and structured event parsing. See `optional-mcps/openhands/DESCRIPTION.md` for details.
+
 ## Prerequisites
 
 1. Install upstream (requires Python 3.12+ and `uv`):
@@ -146,4 +148,5 @@ If the JSONL stream ends with a `FinishAction` whose `action.message` mentions `
 
 - [OpenHands GitHub](https://github.com/All-Hands-AI/OpenHands)
 - [OpenHands CLI command reference](https://docs.openhands.dev/openhands/usage/cli/command-reference)
+- [Hermes MCP Bridge (this repo)](https://github.com/NousResearch/hermes-agent/optional-mcps/openhands) — stdlib-only MCP server bridging Hermes to openhands-agent-server==1.49.3 REST API; alternative to the CLI for headless/embedded use
 - Sibling skills: `claude-code` (Anthropic-only), `codex` (OpenAI-only), `opencode` (multi-provider via OpenCode), `hermes-agent` (Hermes subagents via `delegate_task`).

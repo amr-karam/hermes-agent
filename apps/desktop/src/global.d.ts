@@ -1,10 +1,146 @@
 import type { GatewayWsUrlResult } from '@hermes/shared'
-import type { TranslucencyState } from '@hermes/shared/translucency'
+import type { SurfaceSettings, TranslucencyState } from '@hermes/shared/translucency'
 
 import type { ScreenshotApi } from '../electron/command-screenshot-types'
 import type { HudModifierApi } from '../electron/hud-modifier-types'
 import type { HermesNotification } from '../electron/notification-types'
 import type { PoolLimits } from '../electron/pool-limits'
+
+// @tabler/icons-react doesn't have an exports field and its types don't work well with
+// moduleResolution: Bundler. Declare the module to satisfy TypeScript.
+declare module '@tabler/icons-react' {
+  import type { ForwardRefExoticComponent, FunctionComponent, RefAttributes } from 'react'
+  
+  type IconNode = [elementName: keyof ReactSVG, attrs: Record<string, string>][]
+  interface IconProps extends Partial<Omit<React.ComponentPropsWithoutRef<'svg'>, 'stroke'>> {
+    size?: string | number
+    stroke?: string | number
+    title?: string
+  }
+  type Icon = FunctionComponent<IconProps>
+  type TablerIcon = ForwardRefExoticComponent<IconProps & RefAttributes<SVGSVGElement>>
+  
+  export { Icon }
+  export type { Icon as IconComponent, IconProps, TablerIcon }
+  
+  // All icon components are ForwardRefExoticComponent<IconProps & RefAttributes<SVGSVGElement>>
+  const icons: Record<string, ForwardRefExoticComponent<IconProps & RefAttributes<SVGSVGElement>>>
+  export default icons
+  
+  // Allow any named export as an icon component
+  export const IconActivity: TablerIcon
+  export const IconAlertCircle: TablerIcon
+  export const IconAlertTriangle: TablerIcon
+  export const IconAppWindow: TablerIcon
+  export const IconArchive: TablerIcon
+  export const IconArchiveOff: TablerIcon
+  export const IconArrowUp: TablerIcon
+  export const IconArrowUpRight: TablerIcon
+  export const IconAt: TablerIcon
+  export const IconWaveSine: TablerIcon
+  export const IconChartBar: TablerIcon
+  export const IconBell: TablerIcon
+  export const IconBookmark: TablerIcon
+  export const IconBookmarkFilled: TablerIcon
+  export const IconBox: TablerIcon
+  export const IconBrain: TablerIcon
+  export const IconBug: TablerIcon
+  export const IconCheck: TablerIcon
+  export const IconCircleCheck: TablerIcon
+  export const IconChevronDown: TablerIcon
+  export const IconChevronLeft: TablerIcon
+  export const IconChevronRight: TablerIcon
+  export const IconCircle: TablerIcon
+  export const IconCircleLetterA: TablerIcon
+  export const IconClipboard: TablerIcon
+  export const IconClock: TablerIcon
+  export const IconCloud: TablerIcon
+  export const IconCommand: TablerIcon
+  export const IconCopy: TablerIcon
+  export const IconCornerDownLeft: TablerIcon
+  export const IconCpu: TablerIcon
+  export const IconCreditCard: TablerIcon
+  export const IconDownload: TablerIcon
+  export const IconEar: TablerIcon
+  export const IconEarOff: TablerIcon
+  export const IconEgg: TablerIcon
+  export const IconPlayerEjectFilled: TablerIcon
+  export const IconExternalLink: TablerIcon
+  export const IconEye: TablerIcon
+  export const IconEyeOff: TablerIcon
+  export const IconPhoto: TablerIcon
+  export const IconFileText: TablerIcon
+  export const IconFolderOpen: TablerIcon
+  export const IconGitBranch: TablerIcon
+  export const IconGitFork: TablerIcon
+  export const IconGlobe: TablerIcon
+  export const IconHash: TablerIcon
+  export const IconHelpCircle: TablerIcon
+  export const IconInfoCircle: TablerIcon
+  export const IconKeyboard: TablerIcon
+  export const IconKey: TablerIcon
+  export const IconLayersIntersect2: TablerIcon
+  export const IconLayoutDashboard: TablerIcon
+  export const IconLink: TablerIcon
+  export const IconLoader2: TablerIcon
+  export const IconLock: TablerIcon
+  export const IconLogin: TablerIcon
+  export const IconMail: TablerIcon
+  export const IconMaximize: TablerIcon
+  export const IconMessageCircle: TablerIcon
+  export const IconMessageCode: TablerIcon
+  export const IconMessageQuestion: TablerIcon
+  export const IconMessage2: TablerIcon
+  export const IconMicrophone: TablerIcon
+  export const IconMicrophoneOff: TablerIcon
+  export const IconDeviceDesktop: TablerIcon
+  export const IconDeviceDesktopAnalytics: TablerIcon
+  export const IconMoon: TablerIcon
+  export const IconDots: TablerIcon
+  export const IconDotsVertical: TablerIcon
+  export const IconNetwork: TablerIcon
+  export const IconNotebook: TablerIcon
+  export const IconPackage: TablerIcon
+  export const IconPalette: TablerIcon
+  export const IconLayoutBottombar: TablerIcon
+  export const IconLayoutSidebar: TablerIcon
+  export const IconLayoutNavbar: TablerIcon
+  export const IconPlayerPause: TablerIcon
+  export const IconPaw: TablerIcon
+  export const IconPencil: TablerIcon
+  export const IconPin: TablerIcon
+  export const IconPlayerPlay: TablerIcon
+  export const IconPlus: TablerIcon
+  export const IconPower: TablerIcon
+  export const IconQrcode: TablerIcon
+  export const IconRefresh: TablerIcon
+  export const IconDeviceFloppy: TablerIcon
+  export const IconSearch: TablerIcon
+  export const IconSend: TablerIcon
+  export const IconSettings: TablerIcon
+  export const IconSettings2: TablerIcon
+  export const IconShieldLock: TablerIcon
+  export const IconAdjustmentsHorizontal: TablerIcon
+  export const IconMoodPlus: TablerIcon
+  export const IconSquare: TablerIcon
+  export const IconChartDots3: TablerIcon
+  export const IconSteeringWheel: TablerIcon
+  export const IconPlayerStopFilled: TablerIcon
+  export const IconSun: TablerIcon
+  export const IconTerminal2: TablerIcon
+  export const IconTrash: TablerIcon
+  export const IconUpload: TablerIcon
+  export const IconUsers: TablerIcon
+  export const IconVolume2: TablerIcon
+  export const IconVolumeOff: TablerIcon
+  export const IconTool: TablerIcon
+  export const IconX: TablerIcon
+  export const IconBolt: TablerIcon
+  export const IconBoltFilled: TablerIcon
+  export const IconZoomIn: TablerIcon
+  export const IconZoomOut: TablerIcon
+  export const IconBrandSlack: TablerIcon
+}
 
 import type { WakeIndicatorState } from './lib/wake-indicator'
 import type {
@@ -380,6 +516,28 @@ declare global {
       skipIntro?: boolean
       setTranslucency?: (payload: TranslucencyState) => void
       setKeepAwake?: (on: boolean) => void
+      // ── Native OS appearance facts (read-only in main, synced to renderer) ──
+      // These let the renderer seed surface settings and re-apply a profile's
+      // native foundation faithfully.
+      getNativeTheme: () => Promise<'dark' | 'light'>
+      getNativeAccentColor: () => Promise<string>
+      getNativeHighContrast: () => Promise<boolean>
+       /** Import a profile: sync native OS state into the main process. */
+      setNativeSurfaceState: (payload: {
+        nativeTheme?: 'dark' | 'light'
+        nativeAccentColor?: string
+        nativeHighContrast?: boolean
+      }) => void
+      /** Subscribe to OS theme changes. Returns an unsubscribe function. */
+      onNativeThemeChanged?: (callback: (mode: 'dark' | 'light') => void) => () => void
+      // ── Surface settings: profile export/import + slideshow folder picker ──
+      getSurfaceSettings: () => Promise<SurfaceSettings>
+      setSurfaceSettings: (patch: Partial<SurfaceSettings>) => Promise<SurfaceSettings>
+      pickSlideshowFolder: () => Promise<null | string>
+      pickWallpaper: () => Promise<null | string>
+      setWallpaper: (payload: { path: string; position?: string }) => Promise<{ ok: boolean; error?: string }>
+      clearWallpaper: () => Promise<{ ok: boolean; error?: string }>
+      restartSlideshow: () => void
       minimizeToTray?: {
         get: () => Promise<{ enabled: boolean; available: boolean }>
         set: (on: boolean) => Promise<{ enabled: boolean; available: boolean }>

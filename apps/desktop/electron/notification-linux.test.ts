@@ -30,7 +30,7 @@ vi.mock('dbus-native', () => ({
 
 import { registerNativeNotifications } from './notification-ipc'
 
-function setup(alreadyRunning = false) {
+async function setup(alreadyRunning = false) {
   host.handle.mockClear()
 
   const connection = Object.assign(new EventEmitter(), {
@@ -148,7 +148,7 @@ function setup(alreadyRunning = false) {
   host.fromWebContents.mockReturnValue(source)
   const focusWindow = vi.fn()
 
-  const { dispose } = registerNativeNotifications({
+  const { dispose } = await registerNativeNotifications({
     getMainWindow: () => primary as unknown as BrowserWindow,
     focusWindow,
     platform: 'linux'
@@ -206,7 +206,7 @@ afterEach(() => {
 })
 
 it('bounds failed delivery without dropping older callbacks, and retries only on a later request', async () => {
-  const unavailable = setup()
+  const unavailable = await setup()
   unavailable.fail('StartServiceByName', 'org.freedesktop.DBus.Error.ServiceUnknown')
   expect(await unavailable.notify({ tag: 'test' })).toBe(false)
   expect(await unavailable.notify({ tag: 'test' })).toBe(false)
@@ -215,14 +215,14 @@ it('bounds failed delivery without dropping older callbacks, and retries only on
 
   // libnotify's getenv guard disables actions even for an empty value.
   vi.stubEnv('ELECTRON_USE_UBUNTU_NOTIFIER', '')
-  const unity = setup(true)
+  const unity = await setup(true)
   expect(await unity.notify({ tag: 'unity', actions: [{ id: 'ok', text: 'OK' }] })).toBe(true)
   expect(unity.calls.find(call => call.member === 'Notify')?.body?.[5]).toEqual([])
   unity.connection.emit('close')
   vi.stubEnv('ELECTRON_USE_UBUNTU_NOTIFIER', undefined)
 
   for (const method of ['Hello', 'AddMatch', 'StartServiceByName', 'GetNameOwner', 'GetCapabilities']) {
-    const startup = setup()
+    const startup = await setup()
     startup.stall(method)
     const attempt = startup.notify({ tag: method })
     await vi.advanceTimersByTimeAsync(6000)
@@ -233,7 +233,7 @@ it('bounds failed delivery without dropping older callbacks, and retries only on
     startup.connection.emit('close')
   }
 
-  const h = setup()
+  const h = await setup()
   expect(await h.notify({ tag: 'old', focusSessionId: 'old-session' })).toBe(true)
   expect(h.calls.some(call => call.member === 'StartServiceByName')).toBe(true)
   const oldId = h.lastId()
@@ -261,7 +261,7 @@ it('bounds failed delivery without dropping older callbacks, and retries only on
 })
 
 it('releases naturally closed notifications while retaining other click targets', async () => {
-  const h = setup(true)
+  const h = await setup(true)
   expect(await h.notify({ tag: 'closed', focusSessionId: 'closed-session' })).toBe(true)
   const closedId = h.lastId()
   expect(await h.notify({ tag: 'active', focusSessionId: 'active-session' })).toBe(true)
@@ -283,7 +283,7 @@ it('releases naturally closed notifications while retaining other click targets'
 })
 
 it('preserves activation, dedupe and source ownership while fencing daemon ID reuse', async () => {
-  const race = setup(true)
+  const race = await setup(true)
   race.raceOwnerReply()
   expect(await race.notify({ tag: 'obsolete-owner', focusSessionId: 'must-not-open' })).toBe(false)
   expect(race.calls.filter(call => call.member === 'Notify')).toHaveLength(0)
@@ -293,7 +293,7 @@ it('preserves activation, dedupe and source ownership while fencing daemon ID re
   expect(race.calls.filter(call => call.member === 'Notify')).toHaveLength(1)
   race.connection.emit('close')
 
-  const h = setup(true)
+  const h = await setup(true)
 
   const payload = {
     kind: 'approval',
@@ -331,7 +331,7 @@ it('preserves activation, dedupe and source ownership while fencing daemon ID re
   })
   h.connection.emit('close')
 
-  const reused = setup(true)
+  const reused = await setup(true)
   expect(await reused.notify({ tag: 'old-owner', focusSessionId: 'must-not-open' })).toBe(true)
   const retainedId = reused.lastId()
   reused.replaceOwner()

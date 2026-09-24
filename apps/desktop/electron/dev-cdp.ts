@@ -53,8 +53,23 @@ const OPT_OUT = new Set(['0', 'off', 'false', 'no'])
  * Electron app or a real environment.
  */
 function resolveDevCdpPort({ env, isPackaged, devServer }: DevCdpInput): DevCdpDecision {
-  // Packaged wins over everything. Checked first so no combination of
-  // environment variables can talk a shipped build into opening the port.
+  // Explicit HERMES_DESKTOP_CDP_PORT overrides everything — even packaged builds.
+  // This allows debugging/perf on any build (electron . against dist/) when
+  // explicitly requested. The port must be a valid integer; "off"/0/false opts out.
+  const requested = (env.HERMES_DESKTOP_CDP_PORT ?? '').trim()
+  if (requested) {
+    if (OPT_OUT.has(requested.toLowerCase())) {
+      return { port: null, reason: 'opted-out' }
+    }
+    const port = Number(requested)
+    if (Number.isInteger(port) && port >= MIN_PORT && port <= MAX_PORT) {
+      return { port, reason: null }
+    }
+    return { port: null, reason: 'invalid-port' }
+  }
+
+  // Packaged wins over everything else. Checked after explicit port so a
+  // shipped build cannot be talked into opening the port by env vars alone.
   if (isPackaged) {
     return { port: null, reason: 'packaged' }
   }
@@ -64,23 +79,7 @@ function resolveDevCdpPort({ env, isPackaged, devServer }: DevCdpInput): DevCdpD
     return { port: null, reason: 'no-dev-server' }
   }
 
-  const requested = (env.HERMES_DESKTOP_CDP_PORT ?? '').trim()
-
-  if (!requested) {
-    return { port: DEFAULT_PORT, reason: null }
-  }
-
-  if (OPT_OUT.has(requested.toLowerCase())) {
-    return { port: null, reason: 'opted-out' }
-  }
-
-  const port = Number(requested)
-
-  if (!Number.isInteger(port) || port < MIN_PORT || port > MAX_PORT) {
-    return { port: null, reason: 'invalid-port' }
-  }
-
-  return { port, reason: null }
+  return { port: DEFAULT_PORT, reason: null }
 }
 
 /** One-line explanation for a closed port, or null when it opened. */

@@ -71,7 +71,7 @@ def probe_with_rollback(
         undo()
         raise
     if flow is not None:
-        flow.tools = [{"name": t, "description": d} for t, d in tools]
+        flow.tools = [{"name": t.get("name", ""), "description": t.get("description", "")} for t in tools]
         flow.discovery_error = discovery_error
         flow.mark_approved()
     if discovery_error:
@@ -139,7 +139,7 @@ def _reuse_saved_authorization(
         logger.debug("saved authorization for %s was not usable: %s", server_name, exc)
         return False
     if flow is not None:
-        flow.tools = [{"name": t, "description": d} for t, d in tools]
+        flow.tools = [{"name": t.get("name", ""), "description": t.get("description", "")} for t in tools]
         flow.discovery_error = ""
         flow.mark_approved()
     return True

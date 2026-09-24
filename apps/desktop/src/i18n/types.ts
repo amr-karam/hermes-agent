@@ -905,6 +905,34 @@ export interface Translations {
       }
       backdropTitle: string
       backdropDesc: string
+      wallpaperTitle: string
+      wallpaperDesc: string
+      wallpaperChoose: string
+      wallpaperClear: string
+      wallpaperOpacity: string
+      wallpaperBlur: string
+      wallpaperDarkTitle: string
+      wallpaperDarkDesc: string
+      wallpaperDarkChoose: string
+      wallpaperFailed: string
+      slideshowTitle: string
+      slideshowDesc: string
+      slideshowFolderChoose: string
+      slideshowInterval: string
+      slideshowShuffle: string
+      orchestratorTitle: string
+      orchestratorDesc: string
+      orchestratorModeTitle: string
+      orchestratorModeDesc: string
+      orchestratorFanout: string
+      orchestratorDebate: string
+      orchestratorDelegate: string
+      orchestratorPrimaryModel: string
+      orchestratorSecondaryModel: string
+      orchestratorHealth: string
+      orchestratorRun: string
+      orchestratorBusy: string
+      orchestratorUnavailable: string
       userBubbleTitle: string
       userBubbleDesc: string
       textDirectionTitle: string

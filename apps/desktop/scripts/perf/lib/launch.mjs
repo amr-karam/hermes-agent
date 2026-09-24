@@ -51,7 +51,8 @@ async function waitFor(fn, { timeoutMs, label }) {
 // spawned instance reaches an empty chat view instead of the onboarding wizard.
 // A separate HERMES_HOME dir means a separate gateway lock — no collision with
 // the user's running app, which keeps its own sessions DB and state.
-function seedConfigFrom(sourceHome, targetHome) {
+// For prod runs, skip remote backend config to force local backend startup.
+function seedConfigFrom(sourceHome, targetHome, prod = false) {
   if (!existsSync(sourceHome)) {
     return
   }
@@ -61,7 +62,24 @@ function seedConfigFrom(sourceHome, targetHome) {
 
     if (existsSync(from)) {
       try {
-        copyFileSync(from, join(targetHome, name))
+        if (prod && name === 'config.yaml') {
+          // For prod, strip remote backend config to force local backend
+          const content = readFileSync(from, 'utf8')
+          const lines = content.split('\n')
+          const filtered = lines.filter(line => {
+            const trimmed = line.trim()
+            // Skip remote/ssh connection config
+            return !trimmed.startsWith('mode:') &&
+                   !trimmed.startsWith('url:') &&
+                   !trimmed.startsWith('token:') &&
+                   !trimmed.startsWith('authMode:') &&
+                   !trimmed.startsWith('remoteProfile:') &&
+                   !trimmed.startsWith('profiles:')
+          })
+          writeFileSync(join(targetHome, name), filtered.join('\n'))
+        } else {
+          copyFileSync(from, join(targetHome, name))
+        }
       } catch {
         // best-effort — a missing file just means onboarding may appear.
       }
@@ -84,26 +102,35 @@ function resolveViteBin() {
 }
 
 // Poll the perf driver's `connected()` until the gateway socket is open.
-// Returns false if the probe predates this helper or the timeout elapses.
-async function waitForConnected(cdp, timeoutMs) {
-  const hasProbe = await cdp.eval('typeof window.__PERF_DRIVE__.connected === "function"')
+  // Returns false if the probe predates this helper or the timeout elapses.
+  async function waitForConnected(cdp, timeoutMs) {
+    const deadline = Date.now() + timeoutMs
 
-  if (!hasProbe) {
-    return false
-  }
-
-  const deadline = Date.now() + timeoutMs
-
-  while (Date.now() < deadline) {
-    if (await cdp.eval('window.__PERF_DRIVE__.connected()')) {
-      return true
+    // First, wait for the perf probe to be available (it's loaded at app startup).
+    while (Date.now() < deadline) {
+      const hasProbe = await cdp.eval('typeof window.__PERF_DRIVE__?.connected === "function"')
+      if (hasProbe) {
+        break
+      }
+      await sleep(500)
     }
 
-    await sleep(500)
-  }
+    if (Date.now() >= deadline) {
+      console.warn('[perf] __PERF_DRIVE__ not available after timeout')
+      return false
+    }
 
-  return false
-}
+    // Then wait for gateway connection.
+    while (Date.now() < deadline) {
+      if (await cdp.eval('window.__PERF_DRIVE__.connected()')) {
+        return true
+      }
+
+      await sleep(500)
+    }
+
+    return false
+  }
 
 function runProcess(command, args, { env } = {}) {
   return new Promise((resolveRun, reject) => {
@@ -188,7 +215,7 @@ export async function startIsolatedInstance({
   const devUrl = prod ? null : `http://127.0.0.1:${devPort}`
 
   if (seedConfig && !hermesHome) {
-    seedConfigFrom(join(homedir(), '.hermes'), home)
+    seedConfigFrom(join(homedir(), '.hermes'), home, prod)
   }
 
   const teardown = () => {
@@ -251,25 +278,45 @@ export async function startIsolatedInstance({
     }
 
     const spawnAt = Date.now()
+    console.log('[perf] Spawning electron with env:', { HERMES_HOME: home, HERMES_DESKTOP_CDP_PORT: String(port) })
     const electron = spawn(
       electronBin,
-      ['.', `--user-data-dir=${userData}`, `--remote-debugging-port=${port}`, ...ANTI_THROTTLE_FLAGS],
+      ['.', `--user-data-dir=${userData}`, ...ANTI_THROTTLE_FLAGS],
       { cwd: DESKTOP_DIR, stdio: ['ignore', 'inherit', 'inherit'], env }
     )
+    electron.on('exit', (code, signal) => {
+      console.log(`[perf] Electron exited with code ${code}, signal ${signal}`)
+    })
+    electron.on('error', (e) => {
+      console.error('[perf] Electron spawn error:', e)
+    })
     children.push(electron)
 
     // Wait for the renderer + perf driver. In prod the target URL is file://,
     // so don't match on the dev port.
     let cdp = null
     let cdpAt = 0
+    let attempt = 0
     await waitFor(
       async () => {
+        attempt++
+        if (attempt % 50 === 0) {
+          console.log(`[perf] CDP connection attempt ${attempt}...`)
+        }
         try {
           cdp = await CDP.connect({ port, match: devUrl ? String(devPort) : undefined, timeoutMs: 2000 })
           cdpAt = cdpAt || Date.now()
 
-          return await cdp.eval('!!(window.__PERF_DRIVE__ && window.__PERF_DRIVE__.stream)')
-        } catch {
+          // Wait for the page to actually load the app (not about:blank)
+          const url = await cdp.eval('window.location.href')
+          const isDev = !!devUrl
+          const expectedPrefix = isDev ? `http://127.0.0.1:${devPort}` : 'file://'
+          if (!url.startsWith(expectedPrefix)) {
+            return false
+          }
+
+          return true
+        } catch (e) {
           if (cdp) {
             cdp.close()
             cdp = null
@@ -278,7 +325,7 @@ export async function startIsolatedInstance({
           return false
         }
       },
-      { timeoutMs: 120000, label: 'isolated renderer + __PERF_DRIVE__' }
+      { timeoutMs: prod ? 180000 : 120000, label: 'isolated renderer CDP connection + app load' }
     )
     const driverAt = Date.now()
 

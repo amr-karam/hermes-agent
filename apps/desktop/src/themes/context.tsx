@@ -221,7 +221,7 @@ function applyTheme(theme: DesktopTheme, mode: 'light' | 'dark', chatFontFamily 
   const skinName = theme.name.endsWith(`-${mode}`) ? theme.name.slice(0, -mode.length - 1) : theme.name
 
   root.style.setProperty('color-scheme', rendered)
-  root.dataset.hermesTheme = skinName
+   root.dataset.hermesTheme = skinName
   root.dataset.hermesMode = rendered
   root.classList.toggle('dark', isDark)
 

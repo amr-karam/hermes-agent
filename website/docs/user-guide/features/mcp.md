@@ -51,6 +51,23 @@ List the files in /home/user/projects and summarize the repo structure.
 
 Hermes will discover the MCP server's tools and use them like any other tool.
 
+## CLI Commands
+
+| Command | Description |
+|---------|-------------|
+| `hermes mcp` | Open the interactive catalog picker (default) |
+| `hermes mcp add <name>` | Add a custom MCP server with discovery-first install |
+| `hermes mcp remove <name>` | Remove a server |
+| `hermes mcp list` | List configured servers |
+| `hermes mcp test <name>` | Test connection to a server |
+| `hermes mcp status` | Show server status dashboard with response times |
+| `hermes mcp configure <name>` | Toggle tool selection interactively |
+| `hermes mcp refresh <name>` | Refresh discovered tools, remove stale entries |
+| `hermes mcp validate` | Validate all server configs against schema |
+| `hermes mcp login <name>` | Re-authenticate an OAuth server |
+| `hermes mcp reauth <name> \| --all` | Re-auth one/all OAuth servers |
+| `hermes mcp serve` | Run Hermes as an MCP server |
+
 ## Catalog: one-click install for Nous-approved MCPs
 
 Hermes ships a curated catalog of MCP servers that Nous staff has reviewed
@@ -910,6 +927,31 @@ Possible causes:
 - the server is disabled with `enabled: false`
 
 If you are intentionally filtering, this is expected.
+
+### Validating Server Configurations
+
+Use `hermes mcp validate` to check all configured MCP servers against the schema and security rules:
+
+```bash
+hermes mcp validate
+```
+
+Output shows each server's status:
+
+```
+  MCP Config Validation:
+
+  github:  ✓
+  n8n-official:  ⚠
+    ⚠ Server 'n8n-official': 'url' must be HTTPS
+    ⚠ Server 'n8n-official': has no description — consider adding one
+```
+
+The validator checks:
+- Required fields (`url` or `command`)
+- Type correctness for all config values
+- Tool filter structure (`include`/`exclude` as arrays)
+- Security issues (IOCs, shell with network egress/persistence)
 
 ### Why didn't resource or prompt utilities appear?
 

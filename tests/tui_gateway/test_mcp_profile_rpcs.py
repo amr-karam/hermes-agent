@@ -382,7 +382,7 @@ def test_test_resolves_env_refs_from_requested_profile_secret_scope(hermes_root,
 
     def fake_probe(name, config, connect_timeout=30, details=None):
         resolved.update(mcp_config._resolve_mcp_server_config(config).get("headers", {}))
-        return [("tool-a", "desc")]
+        return [{"name": "tool-a", "description": "desc"}]
 
     monkeypatch.setattr(mcp_config, "_probe_single_server", fake_probe)
     result = _result(_call("mcp.servers.test", {"profile": "work", "name": "srv"}))

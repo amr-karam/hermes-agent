@@ -42,7 +42,7 @@ for line in sys.stdin:
 ''', encoding="utf-8")
     token = set_hermes_home_override(profile)
     try:
-        assert _probe_single_server("fixture", {"command": sys.executable, "args": [str(server)]}) == [("echo", "Echo")]
+        assert _probe_single_server("fixture", {"command": sys.executable, "args": [str(server)]}) == [{"name": "echo", "description": "Echo"}]
     finally:
         reset_hermes_home_override(token)
     try:

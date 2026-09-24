@@ -45,7 +45,7 @@ it('returns native clicks and approval actions to the emitting window, not the p
   const source = windowStub()
   host.fromWebContents.mockReturnValue(source)
   const focusWindow = vi.fn()
-  registerNativeNotifications({
+  await registerNativeNotifications({
     getMainWindow: () => primary as unknown as BrowserWindow,
     focusWindow,
     platform: 'darwin'
@@ -93,7 +93,7 @@ it('delivers plugin callbacks to their source and falls back only for navigation
   const source = windowStub()
   host.fromWebContents.mockReturnValue(source)
   const focusWindow = vi.fn()
-  registerNativeNotifications({
+  await registerNativeNotifications({
     getMainWindow: () => primary as unknown as BrowserWindow,
     focusWindow,
     platform: 'darwin'

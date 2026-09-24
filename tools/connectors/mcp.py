@@ -156,7 +156,7 @@ class _CatalogBackend:
             {**dict(current_secret_scope() or {}), **env},
             profile_home=current_secret_scope_home())
         try:
-            tools = [str(tool[0]) for tool in (_probe_single_server(name, cfg) or [])]
+            tools = [str(tool["name"]) for tool in (_probe_single_server(name, cfg) or [])]
         finally:
             reset_secret_scope(token)
         if not _save_mcp_server(name, cfg):

@@ -43,10 +43,11 @@ const isGatewayReady = (event: GatewayEvent): event is GatewayEvent<'gateway.rea
 // Replay fetch after reconnect: bounded so a wedged backend can't hold the
 // guard open; generous enough for a 512-frame ring to drain.
 const REPLAY_REQUEST_TIMEOUT_MS = 10_000
-// A reconnect after sleep/wake must not hang forever in 'connecting' (which
-// keeps the composer disabled and stuck on "Starting Hermes..."). If the open
-// handshake doesn't land in this window, fail to 'error' so callers can retry.
-const DEFAULT_CONNECT_TIMEOUT_MS = 15_000
+// Match the backend port announcement timeout (DEFAULT_PORT_ANNOUNCE_TIMEOUT_MS
+// in backend-ready.ts). The WebSocket connection cannot succeed until the
+// backend has started and bound its port, so the connect timeout must be at
+// least as long as the port announcement wait.
+const DEFAULT_CONNECT_TIMEOUT_MS = 90_000
 
 /** True for a `ws://` / `wss://` URL string — the only thing `JsonRpcGatewayClient.connect()` will dial. */
 export function isGatewayWebSocketUrl(value: unknown): value is string {

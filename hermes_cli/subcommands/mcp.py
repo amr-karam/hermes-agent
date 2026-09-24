@@ -67,6 +67,9 @@ def build_mcp_parser(subparsers, *, cmd_mcp: Callable) -> None:
         "--all", action="store_true",
         help="Re-authenticate every OAuth server in config, one at a time")
 
+    mcp_sub.add_parser("validate", help="Validate MCP server config schema")
+    mcp_sub.add_parser("refresh", help="Refresh discovered tool list for an MCP server")
+
     # Catalog (Nous-approved MCPs shipped with the repo)
     mcp_sub.add_parser(
         "picker", help="Interactive catalog picker (also the default for `hermes mcp`)")

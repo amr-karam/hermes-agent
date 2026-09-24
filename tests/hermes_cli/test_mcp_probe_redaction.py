@@ -286,7 +286,7 @@ class TestCmdMcpTestRedaction:
         })
         monkeypatch.setattr(
             "hermes_cli.mcp_config._probe_single_server",
-            lambda *a, **k: [("ping", "Ping")],
+            lambda *a, **k: [{"name": "ping", "description": "Ping"}],
         )
         from hermes_cli.mcp_config import cmd_mcp_test
 
@@ -305,7 +305,7 @@ class TestCmdMcpTestRedaction:
         })
         monkeypatch.setattr(
             "hermes_cli.mcp_config._probe_single_server",
-            lambda *a, **k: [("ping", "Ping")],
+            lambda *a, **k: [{"name": "ping", "description": "Ping"}],
         )
         from hermes_cli.mcp_config import cmd_mcp_test
 
@@ -323,7 +323,7 @@ class TestCmdMcpTestRedaction:
         })
         monkeypatch.setattr(
             "hermes_cli.mcp_config._probe_single_server",
-            lambda *a, **k: [("ping", "Ping")],
+            lambda *a, **k: [{"name": "ping", "description": "Ping"}],
         )
         from hermes_cli.mcp_config import cmd_mcp_test
 
@@ -344,7 +344,7 @@ class TestCmdMcpTestRedaction:
         })
         monkeypatch.setattr(
             "hermes_cli.mcp_config._probe_single_server",
-            lambda *a, **k: [("ping", "Ping")],
+            lambda *a, **k: [{"name": "ping", "description": "Ping"}],
         )
         from hermes_cli.mcp_config import cmd_mcp_test
 

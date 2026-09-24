@@ -210,10 +210,10 @@ export function VaultSettings({ subpage }: VaultSettingsProps = {}) {
 
   const externalSources = useMemo(() => (sourcesData ?? []).filter(s => s.needs_unlock), [sourcesData])
 
-  const invalidateVault = useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: VAULT_QUERY_KEY })
-    void queryClient.invalidateQueries({ queryKey: VAULT_SOURCES_QUERY_KEY })
-  }, [queryClient])
+const invalidateVault = useCallback(() => {
+     void queryClient.invalidateQueries({ queryKey: VAULT_QUERY_KEY })
+     void queryClient.invalidateQueries({ queryKey: VAULT_SOURCES_QUERY_KEY })
+   }, [queryClient, VAULT_QUERY_KEY, VAULT_SOURCES_QUERY_KEY])
 
   const setSourceEnabled = useMutation({
     mutationFn: ({ name, enabled }: { name: VaultSourceName; enabled: boolean }) =>
@@ -313,7 +313,7 @@ export function VaultSettings({ subpage }: VaultSettingsProps = {}) {
     setSearchParams(next, { replace: true })
   }, [openAdd, searchParams, setSearchParams])
 
-  const invalidate = useCallback(() => queryClient.invalidateQueries({ queryKey: VAULT_QUERY_KEY }), [queryClient])
+  const invalidate = useCallback(() => queryClient.invalidateQueries({ queryKey: VAULT_QUERY_KEY }), [queryClient, VAULT_QUERY_KEY])
 
   const addMutation = useMutation({
     mutationFn: async (payload: { kind: VaultKind; label: string; origin?: string }) => {

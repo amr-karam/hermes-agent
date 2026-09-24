@@ -6,7 +6,9 @@ profile switcher can target any profile's HERMES_HOME. These tests pin:
 reads/writes land in the REQUESTED profile, the dashboard's own profile
 stays untouched, and the chat PTY env is scoped via HERMES_HOME.
 """
+
 import json
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -16,6 +18,7 @@ import hermes_cli.config as _cfg_mod
 import hermes_cli.web_server_chat as _web_server_chat
 import hermes_cli.web_server_gateway as _web_server_gateway
 import hermes_cli.web_server_messaging as _web_server_messaging
+import hermes_cli.web_server_profiles as _web_server_profiles
 
 
 @pytest.fixture
@@ -65,8 +68,6 @@ def _write_jobs(home, jobs):
 
 
 class TestProfileScopedConfig:
-
-
     def test_config_query_param_equivalent_to_body(self, client, isolated_profiles):
         """The SPA's fetchJSON injects ?profile= — must scope like body.profile."""
         resp = client.put(
@@ -95,7 +96,6 @@ class TestProfileScopedEnv:
         if default_env_path.exists():
             assert "test-fal-123" not in default_env_path.read_text()
 
-
     def test_env_delete_scoped(self, client, isolated_profiles):
         (isolated_profiles["worker_beta"] / ".env").write_text(
             "FAL_KEY=doomed\n", encoding="utf-8"
@@ -110,7 +110,6 @@ class TestProfileScopedEnv:
 
 
 class TestProfileScopedMcp:
-
     def test_mcp_bearer_secret_is_profile_scoped(self, client, isolated_profiles):
         secret = "worker-only-secret"
         response = client.post(
@@ -149,7 +148,9 @@ class TestProfileScopedMcp:
         monkeypatch.setattr(
             mcp_config,
             "_probe_single_server",
-            lambda name, config, connect_timeout=30, details=None: [("tool-a", "desc")],
+            lambda name, config, connect_timeout=30, details=None: [
+                {"name": "tool-a", "description": "desc"}
+            ],
         )
         monkeypatch.setattr(mcp_config, "_oauth_tokens_present", lambda name: False)
 
@@ -184,7 +185,10 @@ class TestProfileScopedMcp:
         def fake_probe(name, config, connect_timeout=30, details=None):
             if details is not None:
                 details["schema_chars"] = {"tool-a": 420}
-            return [("tool-a", "desc-a"), ("tool-b", "desc-b")]
+            return [
+                {"name": "tool-a", "description": "desc-a"},
+                {"name": "tool-b", "description": "desc-b"},
+            ]
 
         monkeypatch.setattr(mcp_config, "_probe_single_server", fake_probe)
 
@@ -199,6 +203,30 @@ class TestProfileScopedMcp:
         # No size for tool-b → the key is simply absent (additive-optional).
         assert "schema_chars" not in tools["tool-b"]
 
+    def test_mcp_test_without_schema_chars_keeps_old_wire_shape(
+        self, client, isolated_profiles, monkeypatch
+    ):
+        """A probe that never fills schema_chars (older code path) produces the
+        exact pre-overlay tool objects — nothing new for old renderers."""
+        import hermes_cli.mcp_config as mcp_config
+
+        (isolated_profiles["worker_beta"] / "config.yaml").write_text(
+            "mcp_servers:\n  plain-srv:\n    url: http://x/mcp\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(
+            mcp_config,
+            "_probe_single_server",
+            lambda name, config, connect_timeout=30, details=None: [
+                {"name": "tool-a", "description": "desc"}
+            ],
+        )
+
+        resp = client.post(
+            "/api/mcp/servers/plain-srv/test", params={"profile": "worker_beta"}
+        )
+        assert resp.status_code == 200
+        assert resp.json()["tools"] == [{"name": "tool-a", "description": "desc"}]
 
     def test_mcp_test_resolves_profile_secret_source_scope(
         self, client, isolated_profiles, monkeypatch
@@ -234,11 +262,13 @@ class TestProfileScopedMcp:
         def fake_probe(name, config, connect_timeout=30, details=None):
             resolved = mcp_config._resolve_mcp_server_config(config)
             resolved_headers.update(resolved.get("headers", {}))
-            return [("tool-a", "desc")]
+            return [{"name": "tool-a", "description": "desc"}]
 
         monkeypatch.setattr(mcp_config, "_probe_single_server", fake_probe)
 
-        resp = client.post("/api/mcp/servers/bw-srv/test", params={"profile": "worker_beta"})
+        resp = client.post(
+            "/api/mcp/servers/bw-srv/test", params={"profile": "worker_beta"}
+        )
 
         assert resp.status_code == 200
         assert resp.json()["ok"] is True
@@ -257,9 +287,13 @@ class TestProfileScopedMcp:
         )
         monkeypatch.setenv("MCP_GH_URL", "http://default-profile/mcp")
         monkeypatch.setattr(
-            env_loader, "get_secret_source_values",
-            lambda hermes_home: {"MCP_GH_URL": "http://worker/mcp"}
-            if Path(hermes_home).resolve() == worker_home.resolve() else {},
+            env_loader,
+            "get_secret_source_values",
+            lambda hermes_home: (
+                {"MCP_GH_URL": "http://worker/mcp"}
+                if Path(hermes_home).resolve() == worker_home.resolve()
+                else {}
+            ),
         )
 
         resp = client.get("/api/mcp/servers", params={"profile": "worker_beta"})
@@ -276,7 +310,9 @@ class TestProfileScopedModel:
         from hermes_cli.model_switch import ModelSwitchResult
 
         def _switch(*, raw_input, explicit_provider, **_kw):
-            return ModelSwitchResult(success=True, new_model=raw_input, target_provider=explicit_provider)
+            return ModelSwitchResult(
+                success=True, new_model=raw_input, target_provider=explicit_provider
+            )
 
         monkeypatch.setattr("hermes_cli.model_switch.switch_model", _switch)
 
@@ -312,30 +348,91 @@ class TestProfileScopedModel:
 
         monkeypatch.setattr(profiles_mod, "create_wrapper_script", lambda name: None)
         (isolated_profiles["default"] / "config.yaml").write_text(
-            "providers:\n  mybox:\n    base_url: http://box:8000/v1\n    key_env: MYBOX_KEY\n", encoding="utf-8")
+            "providers:\n  mybox:\n    base_url: http://box:8000/v1\n    key_env: MYBOX_KEY\n",
+            encoding="utf-8",
+        )
         seen: dict = {}
 
         def _switch(*, raw_input, explicit_provider, user_providers, **_kw):
             from hermes_cli.model_switch import ModelSwitchResult
+
             seen["user_providers"] = user_providers
             seen["home"] = get_hermes_home()
             if explicit_provider not in user_providers:
-                return ModelSwitchResult(success=False, error_message=f"Unknown provider '{explicit_provider}'.")
-            return ModelSwitchResult(success=True, new_model=raw_input, target_provider=explicit_provider)
+                return ModelSwitchResult(
+                    success=False,
+                    error_message=f"Unknown provider '{explicit_provider}'.",
+                )
+            return ModelSwitchResult(
+                success=True, new_model=raw_input, target_provider=explicit_provider
+            )
 
         monkeypatch.setattr("hermes_cli.model_switch.switch_model", _switch)
-        resp = client.post("/api/profiles", json={"name": "newbie", "provider": "mybox", "model": "qwen3"})
+        resp = client.post(
+            "/api/profiles",
+            json={"name": "newbie", "provider": "mybox", "model": "qwen3"},
+        )
         assert resp.status_code == 200 and resp.json()["model_set"] is True
-        assert "mybox" in seen["user_providers"] and seen["home"] == isolated_profiles["default"]
+        assert (
+            "mybox" in seen["user_providers"]
+            and seen["home"] == isolated_profiles["default"]
+        )
         new_home = isolated_profiles["default"] / "profiles" / "newbie"
-        assert _cfg(new_home)["model"]["provider"] == "mybox" and _cfg(new_home)["model"]["default"] == "qwen3"
+        assert (
+            _cfg(new_home)["model"]["provider"] == "mybox"
+            and _cfg(new_home)["model"]["default"] == "qwen3"
+        )
         assert "model" not in _cfg(isolated_profiles["default"])
         # A genuine rejection is reported with its reason, not a silent model_set: false.
-        resp = client.post("/api/profiles", json={"name": "newbie2", "provider": "nobox", "model": "qwen3"})
+        resp = client.post(
+            "/api/profiles",
+            json={"name": "newbie2", "provider": "nobox", "model": "qwen3"},
+        )
         assert resp.status_code == 200 and resp.json()["model_set"] is False
         assert "Unknown provider 'nobox'" in resp.json()["model_error"]
 
+    def test_model_options_uses_config_only_scope_for_selected_profile(
+        self, client, monkeypatch
+    ):
+        """Regression (#58576): _profile_scope holds _SKILLS_PROFILE_LOCK
+        across its body, and the payload build can block up to 15s on a
+        models.dev cache miss — a cold request would starve concurrent
+        /api/config on the same lock. The handler must scope the worker
+        through _config_profile_scope (contextvar only, no lock) for the
+        selected profile."""
+        import hermes_cli.web_server as web_server
 
+        scopes = []
+
+        @contextmanager
+        def _recording_config_scope(profile):
+            scopes.append(("config", profile))
+            yield object()
+
+        @contextmanager
+        def _recording_profile_scope(profile):
+            scopes.append(("full", profile))
+            yield object()
+
+        monkeypatch.setattr(
+            _web_server_profiles, "_config_profile_scope", _recording_config_scope
+        )
+        monkeypatch.setattr(
+            _web_server_profiles, "_profile_scope", _recording_profile_scope
+        )
+        monkeypatch.setattr(
+            "hermes_cli.inventory.load_picker_context", lambda: object()
+        )
+        monkeypatch.setattr(
+            "hermes_cli.inventory.build_model_options_payload",
+            lambda _ctx, **kwargs: {"providers": [], "model": "", "provider": ""},
+        )
+
+        resp = client.get("/api/model/options", params={"profile": "worker_beta"})
+        assert resp.status_code == 200
+        # Only the config-only scope may wrap the payload build; entering
+        # _profile_scope would hold _SKILLS_PROFILE_LOCK across it (#58576).
+        assert scopes == [("config", "worker_beta")]
 
     def test_model_info_unknown_profile_404(self, client, isolated_profiles):
         """Regression: the broad except used to convert the 404 into a 200
@@ -351,6 +448,7 @@ class TestProfileScopedPostSetup:
         """Post-setup runs in a -p scoped subprocess so hooks that read
         config / write per-profile state see the same HERMES_HOME the rest
         of the drawer's writes targeted."""
+        import hermes_cli.web_server as web_server
 
         calls = []
 
@@ -371,14 +469,36 @@ class TestProfileScopedPostSetup:
             json={"key": "agent_browser", "profile": "worker_beta"},
         )
         assert resp.status_code == 200
-        assert calls == [
-            ["-p", "worker_beta", "tools", "post-setup", "agent_browser"]
-        ]
+        assert calls == [["-p", "worker_beta", "tools", "post-setup", "agent_browser"]]
 
+    def test_post_setup_without_profile_keeps_legacy_argv(
+        self, client, isolated_profiles, monkeypatch
+    ):
+        import hermes_cli.web_server as web_server
+
+        calls = []
+
+        class _FakeProc:
+            pid = 777
+
+        monkeypatch.setattr(
+            _web_server_gateway,
+            "_spawn_hermes_action",
+            lambda subcommand, name: calls.append(list(subcommand)) or _FakeProc(),
+        )
+        monkeypatch.setattr(
+            "hermes_cli.tools_config.valid_post_setup_keys",
+            lambda: {"agent_browser"},
+        )
+        resp = client.post(
+            "/api/tools/toolsets/browser/post-setup",
+            json={"key": "agent_browser"},
+        )
+        assert resp.status_code == 200
+        assert calls == [["tools", "post-setup", "agent_browser"]]
 
 
 class TestProfileScopedGateway:
-
     def test_status_reads_requested_profile_home(
         self, client, isolated_profiles, monkeypatch
     ):
@@ -431,9 +551,7 @@ class TestProfileScopedGateway:
             "updated_at": "2026-06-17T00:00:00+00:00",
         }
         monkeypatch.setattr(_cfg_mod, "check_config_version", lambda: (1, 1))
-        monkeypatch.setattr(
-            _gw_status, "get_running_pid_cached", lambda *a, **k: None
-        )
+        monkeypatch.setattr(_gw_status, "get_running_pid_cached", lambda *a, **k: None)
         monkeypatch.setattr(_gw_status, "read_runtime_status", lambda *a, **k: runtime)
         monkeypatch.setattr(
             _gw_status,
@@ -479,21 +597,24 @@ class TestProfileScopedGateway:
             "desired_state": "running",
             "platforms": {
                 "telegram": {"state": "fatal", "error_code": "telegram_auth_error"},
-                "alpha:telegram": {"state": "fatal", "error_code": "credential_collision"},
+                "alpha:telegram": {
+                    "state": "fatal",
+                    "error_code": "credential_collision",
+                },
                 "beta:discord": {"state": "connected"},
             },
             "exit_reason": "telegram: token rejected",
             "updated_at": "2026-06-17T00:00:00+00:00",
         }
         monkeypatch.setattr(_cfg_mod, "check_config_version", lambda: (1, 1))
-        monkeypatch.setattr(
-            _gw_status, "get_running_pid_cached", lambda *a, **k: None
-        )
+        monkeypatch.setattr(_gw_status, "get_running_pid_cached", lambda *a, **k: None)
         monkeypatch.setattr(_gw_status, "read_runtime_status", lambda *a, **k: runtime)
         # Bare platform keys are checked against the configured set (fail
         # closed) — mirror a host that actually has telegram configured.
         monkeypatch.setattr(
-            _web_server_gateway, "_load_configured_gateway_platforms", lambda: {"telegram"}
+            _web_server_gateway,
+            "_load_configured_gateway_platforms",
+            lambda: {"telegram"},
         )
         monkeypatch.setattr(web_server, "_GATEWAY_HEALTH_URL", None)
 
@@ -506,7 +627,10 @@ class TestProfileScopedGateway:
         assert data["gateway_exit_reason"] == "telegram: token rejected"
         # Fatal entries (root and namespaced) survive; the stale non-fatal is dropped.
         assert set(data["gateway_platforms"]) == {"telegram", "alpha:telegram"}
-        assert data["gateway_platforms"]["alpha:telegram"]["error_code"] == "credential_collision"
+        assert (
+            data["gateway_platforms"]["alpha:telegram"]["error_code"]
+            == "credential_collision"
+        )
 
     def test_status_hides_historical_startup_failure_after_operator_stop(
         self, client, isolated_profiles, monkeypatch
@@ -523,9 +647,7 @@ class TestProfileScopedGateway:
             "updated_at": "2026-06-17T00:00:00+00:00",
         }
         monkeypatch.setattr(_cfg_mod, "check_config_version", lambda: (1, 1))
-        monkeypatch.setattr(
-            _gw_status, "get_running_pid_cached", lambda *a, **k: None
-        )
+        monkeypatch.setattr(_gw_status, "get_running_pid_cached", lambda *a, **k: None)
         monkeypatch.setattr(_gw_status, "read_runtime_status", lambda *a, **k: runtime)
         monkeypatch.setattr(web_server, "_GATEWAY_HEALTH_URL", None)
 
@@ -552,9 +674,7 @@ class TestProfileScopedGateway:
             "updated_at": "2026-06-17T00:00:00+00:00",
         }
         monkeypatch.setattr(_cfg_mod, "check_config_version", lambda: (1, 1))
-        monkeypatch.setattr(
-            _gw_status, "get_running_pid_cached", lambda *a, **k: None
-        )
+        monkeypatch.setattr(_gw_status, "get_running_pid_cached", lambda *a, **k: None)
         monkeypatch.setattr(_gw_status, "read_runtime_status", lambda *a, **k: runtime)
         monkeypatch.setattr(web_server, "_GATEWAY_HEALTH_URL", None)
 
@@ -571,6 +691,7 @@ class TestProfileScopedTelegramOnboarding:
         self, client, isolated_profiles, monkeypatch
     ):
         import time
+        import hermes_cli.web_server as web_server
 
         with _web_server_messaging._telegram_onboarding_lock:
             _web_server_messaging._telegram_onboarding_pairings.clear()
@@ -593,7 +714,9 @@ class TestProfileScopedTelegramOnboarding:
         monkeypatch.setattr(
             _web_server_gateway,
             "_spawn_hermes_action",
-            lambda subcommand, name: calls.append((list(subcommand), name)) or _FakeProc(),
+            lambda subcommand, name: (
+                calls.append((list(subcommand), name)) or _FakeProc()
+            ),
         )
         _web_server_gateway._ACTION_PROCS.pop("gateway-restart", None)
         _web_server_gateway._ACTION_COMMANDS.pop("gateway-restart", None)
@@ -620,11 +743,15 @@ class TestProfileScopedTelegramOnboarding:
         worker_cfg = _cfg(isolated_profiles["worker_beta"])
         default_cfg = _cfg(isolated_profiles["default"])
         assert worker_cfg["platforms"]["telegram"]["enabled"] is True
-        assert default_cfg.get("platforms", {}).get("telegram", {}).get("enabled") is not True
+        assert (
+            default_cfg.get("platforms", {}).get("telegram", {}).get("enabled")
+            is not True
+        )
 
 
 class TestProfileScopedChatPty:
     def test_chat_argv_scopes_hermes_home(self, isolated_profiles, monkeypatch):
+        import hermes_cli.web_server as web_server
 
         monkeypatch.setattr(
             "hermes_cli.main_tui_launch._make_tui_argv",
@@ -640,18 +767,14 @@ class TestProfileScopedChatPty:
     def test_chat_argv_bridges_selected_profile_terminal_config(
         self, isolated_profiles, monkeypatch
     ):
+        import hermes_cli.web_server as web_server
 
         (isolated_profiles["default"] / "config.yaml").write_text(
-            "terminal:\n"
-            "  backend: docker\n"
-            "  docker_image: launch-profile-image\n",
+            "terminal:\n  backend: docker\n  docker_image: launch-profile-image\n",
             encoding="utf-8",
         )
         (isolated_profiles["worker_beta"] / "config.yaml").write_text(
-            "terminal:\n"
-            "  backend: ssh\n"
-            "  ssh_host: worker.example.test\n"
-            "  cwd: '~'\n",
+            "terminal:\n  backend: ssh\n  ssh_host: worker.example.test\n  cwd: '~'\n",
             encoding="utf-8",
         )
         monkeypatch.setenv("TERMINAL_ENV", "docker")
@@ -676,6 +799,7 @@ class TestProfileScopedChatPty:
     def test_chat_argv_default_profile_preserves_exported_terminal_values(
         self, isolated_profiles, monkeypatch
     ):
+        import hermes_cli.web_server as web_server
 
         (isolated_profiles["default"] / "config.yaml").write_text(
             "terminal:\n  backend: docker\n",
@@ -699,6 +823,7 @@ class TestProfileScopedChatPty:
     def test_chat_argv_placeholder_cwd_preserves_exported_value(
         self, isolated_profiles, monkeypatch, placeholder
     ):
+        import hermes_cli.web_server as web_server
 
         (isolated_profiles["default"] / "config.yaml").write_text(
             f"terminal:\n  backend: docker\n  cwd: {placeholder}\n",
@@ -747,11 +872,16 @@ class TestProfileScopedChatPty:
         )
 
         with caplog.at_level(logging.WARNING, logger=web_server._log.name):
-            _argv, _cwd, env = _web_server_chat._resolve_chat_argv(profile="worker_beta")
+            _argv, _cwd, env = _web_server_chat._resolve_chat_argv(
+                profile="worker_beta"
+            )
 
         assert env is not None
         assert env["HERMES_HOME"] == str(isolated_profiles["worker_beta"])
         assert "TERMINAL_ENV" not in env
+        assert (
+            "Failed to apply terminal config bridge for dashboard chat" in caplog.text
+        )
 
 
 class TestProfileScopedAudio:

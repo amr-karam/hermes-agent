@@ -1,5 +1,7 @@
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 
+import type { SurfaceSettings } from '../../shared/src/translucency'
+
 import type { DesktopProfileRoute } from './desktop-profile'
 import type { HudModifierApi, HudModifierStatus } from './hud-modifier-types'
 import { customWindowControlsEnabled } from './window-controls'
@@ -368,6 +370,30 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
   setTitleBarTheme: payload => ipcRenderer.send('hermes:titlebar-theme', payload),
   setNativeTheme: mode => ipcRenderer.send('hermes:native-theme', mode),
   setTranslucency: payload => ipcRenderer.send('hermes:translucency', payload),
+  // Read-only native OS appearance facts exposed to the renderer. These are
+  // authoritative in the main process and synced to the surface settings store
+  // on import.
+  getNativeTheme: () => ipcRenderer.invoke('hermes:surface:native-theme'),
+  getNativeAccentColor: () => ipcRenderer.invoke('hermes:surface:native-accent-color'),
+  getNativeHighContrast: () => ipcRenderer.invoke('hermes:surface:native-high-contrast'),
+  // Sync imported native OS state from a profile into the main process.
+  setNativeSurfaceState: (payload: { nativeTheme?: 'dark' | 'light'; nativeAccentColor?: string; nativeHighContrast?: boolean }) =>
+    ipcRenderer.send('hermes:surface:native-state', payload),
+  /** Subscribe to OS theme changes. Returns an unsubscribe function. */
+  onNativeThemeChanged: callback => {
+    const listener = (_event, mode) => callback(mode)
+    ipcRenderer.on('hermes:surface:native-theme:changed', listener)
+
+    return () => ipcRenderer.removeListener('hermes:surface:native-theme:changed', listener)
+  },
+  // Surface settings: full profile export/import + folder picker.
+  getSurfaceSettings: () => ipcRenderer.invoke('hermes:surface:settings:get'),
+  setSurfaceSettings: (patch: Partial<SurfaceSettings>) => ipcRenderer.invoke('hermes:surface:settings:set', patch),
+  pickSlideshowFolder: () => ipcRenderer.invoke('hermes:surface:slideshow:pick-folder'),
+  pickWallpaper: () => ipcRenderer.invoke('hermes:surface:wallpaper:pick'),
+  setWallpaper: (payload: { path: string }) => ipcRenderer.invoke('hermes:surface:wallpaper:set', payload),
+  clearWallpaper: () => ipcRenderer.invoke('hermes:surface:wallpaper:clear'),
+  restartSlideshow: () => ipcRenderer.send('hermes:surface:slideshow:update'),
   setKeepAwake: on => ipcRenderer.send('hermes:keep-awake', on),
   minimizeToTray: {
     get: () => ipcRenderer.invoke('hermes:minimize-to-tray:get'),

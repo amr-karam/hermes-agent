@@ -172,6 +172,13 @@ export {
   WINDOWS_GLASS_MIN_BUILD,
   type WindowsBackgroundMaterial
 } from './translucency'
+
+export {
+  SURFACE_SETTINGS_VERSION,
+  type NativeOsState,
+  type SurfaceProfile,
+  type SurfaceSettings
+} from './translucency'
 export {
   buildHermesWebSocketUrl,
   type GatewayAuthMode,

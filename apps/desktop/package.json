@@ -27,20 +27,22 @@
     "profile:main": "tsc --build tsconfig.electron.json && wait-on http://127.0.0.1:5174 && node scripts/bundle-electron-main.mjs --dev && cross-env XCURSOR_SIZE=24 HERMES_DESKTOP_DEV_SERVER=http://127.0.0.1:5174 electron --inspect=9229 .",
     "profile:main:cpu": "tsc --build tsconfig.electron.json && wait-on http://127.0.0.1:5174 && node scripts/bundle-electron-main.mjs --dev && cross-env XCURSOR_SIZE=24 NODE_OPTIONS=--cpu-prof HERMES_DESKTOP_DEV_SERVER=http://127.0.0.1:5174 electron .",
     "start": "npm run build && electron .",
-    "prebuild": "node scripts/assert-root-install.mjs && npm run clean",
+    "prebuild": "node scripts/assert-root-install.mjs && node -e \"if(!process.env.CI) require('child_process').execSync('npm run clean', {stdio:'inherit'})\"",
     "build": "node scripts/assert-root-install.mjs && node scripts/write-build-stamp.mjs && vite build && node scripts/bundle-electron-main.mjs && node scripts/stage-native-deps.mjs",
     "postbuild": "node scripts/assert-dist-built.mjs",
+    "postinstall": "electron-builder install-app-deps",
     "prebuilder": "node scripts/patch-electron-builder-mac-binary.mjs",
     "builder": "cross-env NODE_OPTIONS=--max-old-space-size=16384 node scripts/run-electron-builder.mjs",
     "pack": "npm run build && npm run builder -- --dir --publish never",
     "dist": "npm run build && npm run builder",
-    "dist:mac": "npm run build && npm run builder -- --mac",
-    "dist:mac:dmg": "npm run build && npm run builder -- --mac dmg",
-    "dist:mac:zip": "npm run build && npm run builder -- --mac zip",
-    "dist:win": "npm run build && npm run builder -- --win",
-    "dist:win:msi": "npm run build && npm run builder -- --win msi",
-    "dist:win:nsis": "npm run build && npm run builder -- --win nsis",
-    "dist:linux": "npm run build && npm run builder -- --linux AppImage deb rpm",
+    "dist:mac": "npm run build && node scripts/run-electron-builder.mjs --mac",
+    "dist:mac:dmg": "npm run build && node scripts/run-electron-builder.mjs --mac dmg",
+    "dist:mac:zip": "npm run build && node scripts/run-electron-builder.mjs --mac zip",
+    "dist:win": "npm run build && node scripts/run-electron-builder.mjs --win",
+    "dist:win:msi": "npm run build && node scripts/run-electron-builder.mjs --win msi",
+    "dist:win:nsis": "npm run build && node scripts/run-electron-builder.mjs --win nsis",
+    "dist:linux": "npm run build && node scripts/run-electron-builder.mjs --linux AppImage deb rpm",
+    "package:win": "npm run build && node scripts/run-electron-builder.mjs --win msi --win nsis",
     "perf": "node scripts/perf/run.mjs",
     "update:shim": "bash ../../scripts/desktop-update/repro.sh shim",
     "update:shim:fail": "bash ../../scripts/desktop-update/repro.sh shim-fail",
@@ -76,7 +78,7 @@
     "test:e2e:update-snapshots": "npm run build && WLR_BACKENDS=headless WLR_NO_HARDWARE_CURSORS=1 cage -- npx playwright test e2e/ --reporter=list --update-snapshots",
     "repro:short-session-hang": "node scripts/run-short-session-hang-repro.mjs"
   },
-  "dependencies": {
+"dependencies": {
     "@assistant-ui/core": "0.2.23",
     "@assistant-ui/react": "0.14.24",
     "@assistant-ui/react-streamdown": "0.3.5",
@@ -119,6 +121,7 @@
     "dnd-core": "14.0.1",
     "dompurify": "3.4.13",
     "driver.js": "1.8.0",
+    "electron-updater": "6.6.2",
     "emojibase-data": "16.0.3",
     "fflate": "0.8.3",
     "frimousse": "0.3.0",
@@ -140,7 +143,6 @@
     "react-dom": "19.2.7",
     "react-router": "8.3.0",
     "react-shiki": "0.9.3",
-    "remark-math": "6.0.0",
     "remend": "1.3.0",
     "shiki": "4.3.1",
     "simple-git": "3.36.0",
@@ -204,6 +206,13 @@
       }
     ],
     "artifactName": "Hermes-${version}-${os}-${arch}.${ext}",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "NousResearch",
+        "repo": "hermes-agent"
+      }
+    ],
     "icon": "assets/icon",
     "directories": {
       "output": "release"
@@ -232,8 +241,7 @@
     "afterSign": "scripts/notarize.mjs",
     "asarUnpack": [
       "**/*.node",
-      "**/prebuilds/**",
-      "dist/**"
+      "**/prebuilds/**"
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
@@ -289,7 +297,9 @@
         "nsis",
         "msi"
       ],
-      "signAndEditExecutable": false
+      "signAndEditExecutable": true,
+      "cscLink": "${CSC_LINK}",
+      "cscKeyPassword": "${CSC_KEY_PASSWORD}"
     },
     "linux": {
       "category": "Development",
@@ -307,7 +317,10 @@
       "perMachine": false,
       "shortcutName": "Hermes",
       "uninstallDisplayName": "Hermes",
-      "warningsAsErrors": false
+      "warningsAsErrors": false,
+      "differentialPackage": true,
+      "createStartMenuShortcut": true,
+      "createDesktopShortcut": true
     }
   }
 }

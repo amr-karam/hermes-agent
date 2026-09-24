@@ -493,3 +493,72 @@ export function glassMaterialForPicker(material: GlassMaterial, isWindows: boole
     DEFAULT_GLASS_MATERIAL
   )
 }
+
+/**
+ * Native OS appearance state that the main process can read directly
+ * (Electron's nativeTheme, system accent color, high-contrast mode).
+ * The renderer syncs these values through the `setNativeSurfaceState` IPC bridge.
+ */
+export interface NativeOsState {
+  /** 'dark' when the OS dark mode is active, 'light' otherwise. */
+  nativeTheme: 'dark' | 'light'
+  /** The OS accent color as a hex string (e.g. "#00aaff"), or '' when unavailable. */
+  nativeAccentColor: string
+  /** True when the OS high-contrast mode is enabled. */
+  nativeHighContrast: boolean
+}
+
+/**
+ * The persisted surface settings — a snapshot of the desktop surface configuration
+ * that can be exported as a profile and later re-imported.
+ */
+export interface SurfaceSettings {
+  theme: 'light' | 'dark' | 'high-contrast'
+  accentColor: { light: { color: string; source: string }; dark: { color: string; source: string } }
+  wallpaper: {
+    path: string
+    position: string
+    opacity: number
+    blur: number
+    darkPath: string
+  }
+  transparency: { enabled: boolean; intensity: number; material: string }
+  slideshow: { enabled: boolean; folder: string; intervalMinutes: number; shuffle: boolean }
+  nativeTheme?: 'dark' | 'light'
+  nativeAccentColor?: string
+  nativeHighContrast?: boolean
+}
+
+export interface SurfaceProfile {
+  version: number
+  settings: SurfaceSettings
+  profiles: Record<string, { exportedAt: string; name: string }>
+}
+
+export const SURFACE_SETTINGS_VERSION = 1
+
+/**
+ * Validates a value as a NativeOsState, returning the parsed values or defaults
+ * for missing/invalid fields. Used when importing a profile that may predate
+ * native OS state tracking.
+ */
+export function normalizeNativeOsState(
+  partial: Partial<Pick<SurfaceSettings, 'nativeTheme' | 'nativeAccentColor' | 'nativeHighContrast'>>
+): Pick<SurfaceSettings, 'nativeTheme' | 'nativeAccentColor' | 'nativeHighContrast'> {
+  return {
+    nativeTheme: partial.nativeTheme === 'light' || partial.nativeTheme === 'dark' ? partial.nativeTheme : undefined,
+    nativeAccentColor: typeof partial.nativeAccentColor === 'string' ? partial.nativeAccentColor : undefined,
+    nativeHighContrast: typeof partial.nativeHighContrast === 'boolean' ? partial.nativeHighContrast : undefined
+  }
+}
+
+/**
+ * Derive the effective theme string from native OS state. When high contrast
+ * is enabled, the theme becomes 'high-contrast' regardless of dark/light.
+ */
+export function themeFromNativeOsState(native: NativeOsState): 'light' | 'dark' | 'high-contrast' {
+  if (native.nativeHighContrast) {
+    return 'high-contrast'
+  }
+  return native.nativeTheme ?? 'light'
+}

@@ -231,11 +231,11 @@ async def test_mcp_server(name: str, profile: Optional[str] = None):
         "ok": True,
         "tools": [
             {
-                "name": t,
-                "description": d,
-                **({"schema_chars": schema_chars[t]} if isinstance(schema_chars.get(t), int) else {}),
+                "name": t["name"],
+                "description": t.get("description", ""),
+                **({"schema_chars": schema_chars[t["name"]]} if isinstance(schema_chars.get(t["name"]), int) else {}),
             }
-            for t, d in tools
+            for t in tools
         ],
         "prompts": details.get("prompts", 0),
         "resources": details.get("resources", 0),

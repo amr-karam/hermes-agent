@@ -54,10 +54,38 @@ export default {
 
     await cdp.send('Runtime.enable')
 
-    const installed = await cdp.eval(INSTALL)
+    // Debug: check what's in the DOM
+    const url = await cdp.eval('window.location.href')
+    console.log('[keystroke] Current URL:', url)
+    const bodyHTML = await cdp.eval('document.body.innerHTML')
+    console.log('[keystroke] Body HTML (first 1000 chars):', bodyHTML.slice(0, 1000))
+    const root = await cdp.eval('document.getElementById("root")?.innerHTML ?? "no root"')
+    console.log('[keystroke] Root HTML (first 1000 chars):', root.slice(0, 1000))
+    
+    // Check for console errors
+    const errors = await cdp.eval('window.__CONSOLE_ERRORS__ || []')
+    console.log('[keystroke] Console errors:', errors)
+    const perfProbe = await cdp.eval('window.__PERF_PROBE__')
+    console.log('[keystroke] __PERF_PROBE__:', perfProbe)
+    const perfDrive = await cdp.eval('window.__PERF_DRIVE__')
+    console.log('[keystroke] __PERF_DRIVE__:', perfDrive)
 
-    if (!installed) {
-      throw new Error(`composer not found (${SELECTORS.composer}); is a chat view open?`)
+    // Wait for composer to be ready (app may still be loading on fresh start)
+    const composerWaitMs = Number(opts['composer-wait'] ?? 60000)
+    const composerDeadline = Date.now() + composerWaitMs
+    let composerReady = false
+
+    while (Date.now() < composerDeadline) {
+      const installed = await cdp.eval(INSTALL)
+      if (installed) {
+        composerReady = true
+        break
+      }
+      await sleep(500)
+    }
+
+    if (!composerReady) {
+      throw new Error(`composer not found (${SELECTORS.composer}) after ${composerWaitMs}ms; is a chat view open?`)
     }
 
     let text = ''

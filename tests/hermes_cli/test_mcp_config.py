@@ -82,6 +82,12 @@ class FakeTool:
 # ---------------------------------------------------------------------------
 
 class TestMcpList:
+    def test_list_empty_config(self, tmp_path, capsys):
+        from hermes_cli.mcp_config import cmd_mcp_list
+
+        cmd_mcp_list()
+        out = capsys.readouterr().out
+        assert "No MCP servers configured" in out
 
     def test_list_with_servers(self, tmp_path, capsys):
         _seed_config(tmp_path, {
@@ -178,7 +184,7 @@ class TestMcpAdd:
         ]
 
         def mock_probe(name, config, **kw):
-            return [(t.name, t.description) for t in fake_tools]
+            return [{"name": t.name, "description": t.description} for t in fake_tools]
 
         monkeypatch.setattr(
             "hermes_cli.mcp_config._probe_single_server", mock_probe
@@ -211,7 +217,7 @@ class TestMcpAdd:
                 "MY_API_KEY": "secret123",
                 "DEBUG": "true",
             }
-            return [(t.name, t.description) for t in fake_tools]
+            return [{"name": t.name, "description": t.description} for t in fake_tools]
 
         monkeypatch.setattr(
             "hermes_cli.mcp_config._probe_single_server", mock_probe
@@ -252,7 +258,7 @@ class TestMcpAdd:
             assert config["command"] == "npx"
             assert config["args"] == ["-y", "test-mcp-server"]
             assert "env" not in config
-            return [(t.name, t.description) for t in fake_tools]
+            return [{"name": t.name, "description": t.description} for t in fake_tools]
 
         monkeypatch.setattr(
             "hermes_cli.mcp_config._probe_single_server", mock_probe
@@ -279,6 +285,23 @@ class TestMcpAdd:
 
 class TestMcpTest:
 
+    def test_test_success(self, tmp_path, capsys, monkeypatch):
+        _seed_config(tmp_path, {
+            "ink": {"url": "https://mcp.ml.ink/mcp"},
+        })
+
+        def mock_probe(name, config, **kw):
+            return [{"name": "create_service", "description": "Deploy"}, {"name": "list_services", "description": "List all"}]
+
+        monkeypatch.setattr(
+            "hermes_cli.mcp_config._probe_single_server", mock_probe
+        )
+        from hermes_cli.mcp_config import cmd_mcp_test
+
+        cmd_mcp_test(_make_args(name="ink"))
+        out = capsys.readouterr().out
+        assert "Connected" in out
+        assert "Tools discovered: 2" in out
 
     def test_exit_codes_distinguish_failure_from_unknown_server(self, tmp_path, capsys, monkeypatch):
         """0 connected, 1 connection failed, 3 not in config — never argparse's 2, never a silent 0."""
@@ -313,6 +336,7 @@ class TestMcpTest:
         """OAuth-capable probes must not hard-code a short 30s timeout."""
         import asyncio
         from hermes_cli import mcp_config
+        import tools.mcp_tool as mcp_tool
         from tools import mcp_tool_discovery as _mcp_discovery
         from tools import mcp_tool_lifecycle as _mcp_lifecycle
         from tools import mcp_tool_loop as _mcp_loop
@@ -393,6 +417,7 @@ class TestContextVarInterpolation:
         assert _interpolate_env_vars("${/}") == os.sep
 
     def test_workspace_folder_and_basename(self, monkeypatch):
+        import tools.mcp_tool as mcp_tool
 
         monkeypatch.setattr(
             _mcp_config, "_workspace_folder", lambda: "/srv/projects/myapp"
@@ -418,6 +443,7 @@ class TestContextVarInterpolation:
     def test_mixed_string_with_env_and_context_vars(self, monkeypatch):
         import os
 
+        import tools.mcp_tool as mcp_tool
 
         monkeypatch.setenv("MY_TOKEN", "tok-1")
         monkeypatch.setattr(_mcp_config, "_workspace_folder", lambda: "/ws/app")
@@ -446,6 +472,7 @@ class TestContextVarInterpolation:
     def test_context_vars_in_nested_config(self, monkeypatch):
         import os
 
+        import tools.mcp_tool as mcp_tool
         from tools import mcp_tool_config as _mcp_config
 
         monkeypatch.setattr(_mcp_config, "_workspace_folder", lambda: "/ws/app")
@@ -532,7 +559,7 @@ class TestProbeEnvResolution:
             "headers": {"Authorization": "Bearer ${MCP_N8N_API_KEY}"},
         })
 
-        assert tools == [("do_thing", "a tool")]
+        assert tools == [{"name": "do_thing", "description": "a tool"}]
         assert seen["config"]["headers"]["Authorization"] == "Bearer jwt-token-xyz"
 
     def test_probe_propagates_explicit_connect_timeout_to_config(self, monkeypatch):
@@ -802,7 +829,7 @@ class TestMcpLogin:
             seen["connect_timeout"] = connect_timeout
             token_dir.mkdir(exist_ok=True)
             (token_dir / "realserver.json").write_text('{"access_token": "x"}', encoding="utf-8")
-            return [("a", "d"), ("b", "d"), ("c", "d")]
+            return [{"name": "a", "description": "d"}, {"name": "b", "description": "d"}, {"name": "c", "description": "d"}]
 
         monkeypatch.setattr(
             "hermes_cli.mcp_config._probe_single_server", mock_probe
@@ -840,7 +867,7 @@ class TestMcpLogin:
             state_at_probe.update({p.name: p.exists() for p in token_dir.glob("tv*")})
             state_at_probe["meta"] = (token_dir / "tv.meta.json").exists()
             (token_dir / "tv.json").write_text('{"access_token": "fresh"}', encoding="utf-8")
-            return [("a", "d")]
+            return [{"name": "a", "description": "d"}]
 
         monkeypatch.setattr("hermes_cli.mcp_config._probe_single_server", mock_probe)
         from hermes_cli.mcp_config import cmd_mcp_login

@@ -19,24 +19,49 @@ test('a dev-server run opens the default port with no opt-in', () => {
   assert.deepEqual(resolveDevCdpPort(devRun), { port: DEFAULT_PORT, reason: null })
 })
 
-test('a packaged build never opens the port, however loudly the env asks', () => {
-  const decision = resolveDevCdpPort({ ...devRun, env: { HERMES_DESKTOP_CDP_PORT: '9222' }, isPackaged: true })
-
-  assert.deepEqual(decision, { port: null, reason: 'packaged' })
+test('the default matches what the scripts/ tooling reaches for', () => {
+  // scripts/eval.mjs and scripts/perf/lib/cdp.mjs both default here; if this
+  // drifts, `node scripts/eval.mjs ...` stops finding a live renderer.
+  assert.equal(DEFAULT_PORT, 9222)
 })
 
-test('packaged is checked before every other gate', () => {
-  // Belt-and-suspenders: dev server present, valid port requested, still shut.
-  for (const value of ['9222', '', 'off', 'garbage']) {
-    const decision = resolveDevCdpPort({
-      env: { HERMES_DESKTOP_CDP_PORT: value },
-      isPackaged: true,
-      devServer: DEV_SERVER
-    })
+test('an explicit HERMES_DESKTOP_CDP_PORT opens the port even on a packaged build', () => {
+  const decision = resolveDevCdpPort({ ...devRun, env: { HERMES_DESKTOP_CDP_PORT: '9222' }, isPackaged: true })
 
-    assert.equal(decision.port, null, `expected packaged to refuse ${JSON.stringify(value)}`)
-    assert.equal(decision.reason, 'packaged')
-  }
+  assert.deepEqual(decision, { port: 9222, reason: null })
+})
+
+test('packaged build without explicit port stays closed', () => {
+  const decision = resolveDevCdpPort({
+    env: { HERMES_DESKTOP_CDP_PORT: '' },
+    isPackaged: true,
+    devServer: DEV_SERVER
+  })
+
+  assert.equal(decision.port, null)
+  assert.equal(decision.reason, 'packaged')
+})
+
+test('packaged build with explicit opt-out reports opted-out', () => {
+  const decision = resolveDevCdpPort({
+    env: { HERMES_DESKTOP_CDP_PORT: 'off' },
+    isPackaged: true,
+    devServer: DEV_SERVER
+  })
+
+  assert.equal(decision.port, null)
+  assert.equal(decision.reason, 'opted-out')
+})
+
+test('packaged build with invalid port refuses it', () => {
+  const decision = resolveDevCdpPort({
+    env: { HERMES_DESKTOP_CDP_PORT: '99999' },
+    isPackaged: true,
+    devServer: DEV_SERVER
+  })
+
+  assert.equal(decision.port, null)
+  assert.equal(decision.reason, 'invalid-port')
 })
 
 test('an unpackaged dist run (no dev server) does not qualify', () => {

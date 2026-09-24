@@ -1429,7 +1429,7 @@ def _(rid, params: dict) -> dict:
     if not token_present:
         return failure("OAuth authentication required — no token found.", True, False)
     return _ok(rid, {
-        "ok": True, "tools": [{"name": t, "description": d} for t, d in tools],
+        "ok": True, "tools": [{"name": t["name"], "description": t.get("description", "")} for t in tools],
         "prompts": details.get("prompts", 0), "resources": details.get("resources", 0),
         "oauth_needed": needs_oauth_token, "oauth_tokens_present": True if needs_oauth_token else None})
 

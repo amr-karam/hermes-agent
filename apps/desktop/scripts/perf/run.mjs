@@ -114,6 +114,8 @@ async function main() {
   const prod = 'prod' in flags
   const cpuProfile = 'cpuprofile' in flags
   const cpuProfileDir = typeof flags.cpuprofile === 'string' ? flags.cpuprofile : HERE
+  const baselinePath = flags.baseline ? resolve(String(flags.baseline)) : BASELINE_PATH
+  const connectTimeoutMs = Number(flags['connect-timeout'] ?? 90000)
 
   const coldNames = names.filter(n => SCENARIOS[n].tier === 'cold')
   const liveNames = names.filter(n => SCENARIOS[n].tier !== 'cold')
@@ -121,7 +123,7 @@ async function main() {
   // ci + cold metrics are stable enough to gate against the baseline; backend
   // scenarios vary too much with the live environment, so they're report-only.
   const GATED = new Set(['ci', 'cold'])
-  const baseline = loadBaseline(BASELINE_PATH)
+  const baseline = loadBaseline(baselinePath)
   const results = []
   let regressed = false
 
@@ -159,7 +161,7 @@ async function main() {
   // Steady-state scenarios share one persistent connection.
   if (liveNames.length) {
     const connection = flags.spawn
-      ? await startIsolatedInstance({ port, devPort, prod })
+      ? await startIsolatedInstance({ port, devPort, prod, connectTimeoutMs })
       : await attach({ port, match: prod ? undefined : String(devPort) })
 
     const { cdp, teardown } = connection
@@ -202,8 +204,8 @@ async function main() {
   }
 
   if (flags['update-baseline']) {
-    updateBaseline(BASELINE_PATH, results.filter(r => GATED.has(r.tier)))
-    console.log(`\nupdated ${BASELINE_PATH}`)
+    updateBaseline(baselinePath, results.filter(r => GATED.has(r.tier)))
+    console.log(`\nupdated ${baselinePath}`)
     return
   }
 

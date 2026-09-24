@@ -14,7 +14,7 @@ import { WIDGET_SHELL_CLASS } from '@/components/chat/widget-shell'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { useI18n } from '@/i18n'
-import { Book, Loader2, Plug } from '@/lib/icons'
+import { FileText, Loader2, Package } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 import {
   type CatalogEntry,
@@ -34,7 +34,7 @@ const SHELL_CLASS = `${WIDGET_SHELL_CLASS} text-[length:var(--conversation-text-
 const CAPTION = 'text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height)'
 const PILL = 'inline-flex items-center rounded-full px-1.5 py-0.5 text-[0.62rem] font-medium leading-[0.93rem]'
 
-const KIND_GLYPH = { plugin: Plug, skill: Book } as const
+const KIND_GLYPH = { plugin: Package, skill: FileText } as const
 
 const PLATFORM_NAMES: Record<string, string> = { darwin: 'macOS', linux: 'Linux', macos: 'macOS', windows: 'Windows' }
 const platformName = (platform: string) => PLATFORM_NAMES[platform.toLowerCase()] ?? platform

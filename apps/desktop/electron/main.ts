@@ -32,6 +32,7 @@ import {
 } from 'electron'
 
 import { classifyActiveRuntime } from './active-runtime-state'
+import { initAutoUpdater } from './auto-updater'
 import {
   destroyKeepaliveAgents,
   downloadAgentFor,
@@ -433,6 +434,7 @@ import { createSshProbeConnection, pickLocalPort, redactSecrets, SshConnection }
 import { createSshIsolatedKeepaliveRegistry } from './ssh-isolated-keepalive'
 import { createSshTeardownTracker } from './ssh-teardown'
 import { createStreamThrottle } from './stream-throttle'
+import { registerSurfaceIpc } from './surface-ipc'
 import { registerTerminalIpc } from './terminal-ipc'
 import { nativeOverlayWidth as computeNativeOverlayWidth, titleBarOverlayOptions } from './titlebar-overlay-width'
 import {
@@ -13143,14 +13145,30 @@ function releaseHostSpawnReservation() {
   hostSpawnReservation = null
 }
 
+let currentStartHermesPromise: Promise<unknown> | null = null
+
 function startHermes({ supervisorRecovery = false }: { supervisorRecovery?: boolean } = {}) {
   primaryRecoverySuppressed = false
   primaryStartsInFlight += 1
 
+  // If there's already a backend start in progress, return the existing
+  // promise instead of racing to create a new one (prevents "superseded"
+  // errors when hermes:api fires during initial boot).
+  // currentStartHermesPromise is cleared in releaseStart when the promise
+  // settles, so its truthiness directly indicates an in-flight start.
+  // Also check backendConnectionState.getPromise() in case a previous
+  // attempt's promise is still valid (hasn't been invalidated).
+  if (currentStartHermesPromise || backendConnectionState.getPromise()) {
+    primaryStartsInFlight -= 1
+    return currentStartHermesPromise || backendConnectionState.getPromise()!
+  }
+
   const start = localBackendLifecycle.start(() => runHermesStart({ supervisorRecovery }))
+  currentStartHermesPromise = start
 
   const releaseStart = () => {
     primaryStartsInFlight -= 1
+    currentStartHermesPromise = null
   }
 
   // Ordering contract: this reaction is registered on the SAME promise the
@@ -15409,6 +15427,8 @@ function createWindow() {
     broadcastBootProgress()
     sendWindowStateChanged()
   })
+
+  initAutoUpdater(mainWindow)
 }
 
 ipcMain.handle('hermes:connection', async (event, profile, extra) => {
@@ -15506,6 +15526,18 @@ ipcMain.on('hermes:connection:active-route', (event, route) => recordWindowConne
 // not, we drop the cache so the next getConnection() rebuilds it. Local backends
 // self-heal via their child 'exit' handler, so we never touch them here.
 ipcMain.handle('hermes:connection:revalidate', async () => {
+  // Skip revalidation if primary backend startup is in progress. The renderer's
+  // reconnect loop fires this after sleep/wake, but during a fresh boot the
+  // first attempt is still resolving its promise. A revalidation probe that
+  // fails would call resetHermesConnection({ soft: true }) which invalidates
+  // the attempt, causing "Hermes backend start was superseded" errors.
+  // Check both localBackendLifecycle.hasPending() (for in-flight spawns) and
+  // currentStartHermesPromise/primaryStartsInFlight (set synchronously in
+  // startHermes before the microtask that populates lifecycle.starts runs).
+  if (localBackendLifecycle.hasPending() || currentStartHermesPromise || primaryStartsInFlight > 0) {
+    return { ok: true, rebuilt: false, skipped: 'startup-in-progress' }
+  }
+
   const connectionPromise = backendConnectionState.getPromise()
 
   if (!connectionPromise) {
@@ -17366,7 +17398,7 @@ ipcMain.handle('hermes:api', async (_event, request) => {
 const ownsAmbientCue = createAmbientClaimArbiter()
 ipcMain.handle('hermes:ambient:claim', (_event, key) => ownsAmbientCue(String(key ?? '')))
 
-const nativeNotifications = registerNativeNotifications({ getMainWindow: () => mainWindow, focusWindow })
+const nativeNotificationsPromise = registerNativeNotifications({ getMainWindow: () => mainWindow, focusWindow })
 
 // Data-URL file load cap (composer attach + local previews). Main owns the
 // persisted MB value so every IPC read honours Settings → Chat without the
@@ -17759,7 +17791,7 @@ app.on('before-quit', () => {
 app.on('will-quit', () => {
   sshIsolatedKeepalives.stopAll()
   destroyKeepaliveAgents()
-  nativeNotifications.dispose()
+  void nativeNotificationsPromise.then(n => n.dispose())
   quitFinalization.arm()
 })
 
@@ -18111,6 +18143,10 @@ registerGitIpc({ resolveGitBinary, resolveGhBinary })
 // Client-side loopback callback for MCP OAuth against remote backends — see
 // mcp-oauth-callback-ipc.ts.
 registerMcpOauthCallbackIpc()
+
+// Surface settings + OS wallpaper/slideshow (hermes:surface:*) — see
+// surface-ipc.ts.
+registerSurfaceIpc({ rememberLog, getParentWindow: () => mainWindow })
 
 // Embedded terminal PTY host (hermes:terminal:*) — see terminal-ipc.ts.
 const terminalIpc = registerTerminalIpc({

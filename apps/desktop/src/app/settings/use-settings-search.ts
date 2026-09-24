@@ -6,9 +6,10 @@ import { useGatewayRequest } from '@/app/gateway/hooks/use-gateway-request'
 import { $pluginRecords } from '@/contrib/plugins-store'
 import { getEnvVars, getHermesConfigSchema } from '@/hermes'
 import { useI18n } from '@/i18n'
-import { type IconComponent, Monitor, Package, Palette, Settings2, Wrench } from '@/lib/icons'
+import { type IconComponent, Cpu, Monitor, Package, Palette, Settings2, Wrench } from '@/lib/icons'
 import { $agentPlugins, isDesktopRelevantPlugin, loadAgentPlugins } from '@/store/agent-plugins'
 import { $gatewayState } from '@/store/session'
+import { SURFACE_WALLPAPER_SUPPORTED } from '@/store/surface-settings'
 import { TRANSLUCENCY_SUPPORTED } from '@/store/translucency'
 
 import { useHermesConfigRecord } from '../hooks/use-config-record'
@@ -179,6 +180,40 @@ export function useSettingsSearchCatalog(enabled: boolean) {
           }
         ]
       : []),
+    // Wallpaper/slideshow only exist where the OS can apply them (mac/win) —
+    // same reasoning as the translucency row above.
+    ...(SURFACE_WALLPAPER_SUPPORTED
+      ? [
+          {
+            context: appearanceContext,
+            description: appearance.slideshowDesc,
+            icon: Palette,
+            id: `setting:${APPEARANCE_SETTING_IDS.slideshow}`,
+            keywords: ['rotate', 'timer', 'background', 'pictures', 'desktop'],
+            label: appearance.slideshowTitle,
+            target: { setting: APPEARANCE_SETTING_IDS.slideshow, view: 'config:appearance' as const }
+          },
+          {
+            context: appearanceContext,
+            description: appearance.wallpaperDesc,
+            icon: Palette,
+            id: `setting:${APPEARANCE_SETTING_IDS.wallpaper}`,
+            keywords: ['background', 'desktop', 'picture', 'image', 'opacity', 'blur'],
+            label: appearance.wallpaperTitle,
+            target: { setting: APPEARANCE_SETTING_IDS.wallpaper, view: 'config:appearance' as const }
+          }
+        ]
+      : []),
+    // Model Orchestrator — local two-model coordination (Ollama-backed).
+    {
+      context: appearanceContext,
+      description: appearance.orchestratorDesc,
+      icon: Cpu,
+      id: `setting:${APPEARANCE_SETTING_IDS.orchestrator}`,
+      keywords: ['models', 'ollama', 'parallel', 'coordination', 'local'],
+      label: appearance.orchestratorTitle,
+      target: { setting: APPEARANCE_SETTING_IDS.orchestrator, view: 'config:appearance' as const }
+    },
     {
       context: appearanceContext,
       description: appearance.userBubbleDesc,
@@ -188,15 +223,7 @@ export function useSettingsSearchCatalog(enabled: boolean) {
       label: appearance.userBubbleTitle,
       target: { setting: APPEARANCE_SETTING_IDS.userBubble, view: 'config:appearance' }
     },
-    {
-      context: appearanceContext,
-      description: appearance.textDirectionDesc,
-      icon: Palette,
-      id: `setting:${APPEARANCE_SETTING_IDS.textDirection}`,
-      keywords: ['rtl', 'ltr', 'right to left', 'left to right', 'bidi', 'arabic', 'hebrew', 'persian', 'align'],
-      label: appearance.textDirectionTitle,
-      target: { setting: APPEARANCE_SETTING_IDS.textDirection, view: 'config:appearance' }
-    },
+    
     {
       context: appearanceContext,
       description: appearance.backdropDesc,
@@ -215,15 +242,7 @@ export function useSettingsSearchCatalog(enabled: boolean) {
       label: appearance.introSplashTitle,
       target: { setting: APPEARANCE_SETTING_IDS.introSplash, view: 'config:appearance' }
     },
-    {
-      context: appearanceContext,
-      description: t.interfaceMode.hint,
-      icon: Palette,
-      id: `setting:${APPEARANCE_SETTING_IDS.interfaceMode}`,
-      keywords: ['simple', 'advanced', 'mode', 'interface', 'chrome', 'minimal', 'focus'],
-      label: t.interfaceMode.title,
-      target: { setting: APPEARANCE_SETTING_IDS.interfaceMode, view: 'config:appearance' }
-    },
+    
     {
       context: appearanceContext,
       description: appearance.toolViewDesc,

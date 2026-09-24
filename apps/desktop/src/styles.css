@@ -3698,3 +3698,70 @@ html[data-hud-window] [data-slot='popover-content'] {
 [data-hud-shell] [data-slot='composer-bounds'] *::-webkit-scrollbar {
   display: none;
 }
+
+/* ── High-contrast theme variant ──────────────────────────────────────────────
+   When SurfaceSettings.theme === 'high-contrast', the app applies a
+   'high-contrast' class on <html> (see themes/context.tsx). These rules
+   ensure WCAG 2.1 minimum contrast on every surface. */
+
+html.high-contrast {
+  --theme-foreground: #000000;
+  --theme-primary: #0000ff;
+  --theme-background-seed: #ffffff;
+  --theme-card-seed: #ffffff;
+  --theme-elevated-seed: #ffffff;
+  --theme-sidebar-seed: #ffffff;
+  --theme-bubble-seed: #0000ff;
+  --theme-neutral-chrome: #000000;
+  --theme-neutral-sidebar: #000000;
+  --theme-neutral-card: #000000;
+  --ui-accent: #0000ff;
+  --ui-base: #000000;
+}
+
+html.high-contrast {
+  --theme-midground: #0000ff;
+  --theme-accent-soft: #0000ff;
+  --theme-warm: #000000;
+}
+
+/* Borders and strokes get maximum contrast. */
+html.high-contrast [data-slot='sidebar'],
+html.high-contrast .border,
+html.high-contrast .border-border {
+  border-color: #000000 !important;
+}
+
+/* Links and interactive elements. */
+html.high-contrast a,
+html.high-contrast .text-link {
+  color: #0000ee;
+  text-decoration: underline;
+}
+
+/* Ensure text is always at least 4.5:1 against white/black backgrounds. */
+html.high-contrast .text-muted-foreground,
+html.high-contrast .muted-foreground {
+  color: #000000 !important;
+}
+
+/* Focus outline remains visible. */
+html.high-contrast :focus-visible {
+  outline: 2px solid #0000ff;
+  outline-offset: 2px;
+}
+
+/* Code blocks and syntax highlighting. */
+html.high-contrast pre,
+html.high-contrast code {
+  background: #ffffff;
+  color: #000000;
+}
+
+/* Icons and decorative elements. */
+html.high-contrast [class*='text-amber'],
+html.high-contrast [class*='text-emerald'],
+html.high-contrast [class*='text-rose'],
+html.high-contrast [class*='text-sky'] {
+  filter: contrast(1.5) saturate(0) brightness(0);
+}

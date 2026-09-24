@@ -200,8 +200,10 @@ def _confirm(question: str, default: bool = True) -> bool:
     return val in {"y", "yes"} if val else default
 
 
-def _print_tools(tools: List[Tuple[str, str]], width: int, desc_max: int) -> None:
-    for tool_name, desc in tools:
+def _print_tools(tools: List[dict], width: int, desc_max: int) -> None:
+    for tool in tools:
+        tool_name = tool["name"]
+        desc = tool.get("description", "")
         short = desc[:desc_max] + "..." if len(desc) > desc_max else desc
         print(f"    {color(tool_name, Colors.GREEN):{width}s} {short}")
 
@@ -224,6 +226,12 @@ def _tool_filters(cfg: dict) -> Tuple[Optional[list], Optional[list]]:
     if not isinstance(tools_cfg, dict):
         return None, None
     include, exclude = tools_cfg.get("include"), tools_cfg.get("exclude")
+    # Handle "all" shorthand for include
+    if include == ["all"]:
+        include = None
+    # Handle "none" shorthand for exclude
+    if exclude == ["none"]:
+        exclude = None
     return (
         include if isinstance(include, list) else None,
         exclude if isinstance(exclude, list) else None)
@@ -248,9 +256,91 @@ def _validate_or_warn(name: str, server_config: dict) -> bool:
     issues = validate_mcp_server_entry(name, server_config)
     for issue in issues:
         _warning(issue)
+
+    # Additional non-blocking warnings for common config patterns
+    tools = server_config.get("tools", {})
+    if isinstance(tools, dict):
+        include = tools.get("include", [])
+        exclude = tools.get("exclude", [])
+        if include is not None and isinstance(include, list) and len(include) == 0:
+            _warning(f"Server '{name}' has an empty include list — no tools will register.")
+        if exclude is not None and isinstance(exclude, list) and len(exclude) == 0:
+            _warning(f"Server '{name}' has an empty exclude list — no tools will be filtered.")
+
+    # Flag http:// URLs
+    url = server_config.get("url")
+    if url and url.startswith("http://"):
+        _warning(
+            f"Server '{name}' uses HTTP URL — consider HTTPS for security. "
+            f"Current: {url}"
+        )
+
+    # Flag missing description or name
+    if not server_config.get("description"):
+        _warning(f"Server '{name}' has no description — consider adding one for clarity.")
+
     if issues:
         _warning(f"Server '{name}' was NOT saved due to suspicious configuration.")
     return not issues
+
+
+def _validate_mcp_schema(name: str, server_config: dict) -> List[str]:
+    """Validate MCP server config against expected schema; returns list of issues (empty = valid)."""
+    issues: List[str] = []
+    
+    # Must have either url or command
+    if not server_config.get("url") and not server_config.get("command"):
+        issues.append(f"Server '{name}': must specify either 'url' (HTTP) or 'command' (stdio)")
+    
+    # url must be string if present
+    if "url" in server_config and not isinstance(server_config.get("url"), str):
+        issues.append(f"Server '{name}': 'url' must be a string")
+    
+    # command must be string if present
+    if "command" in server_config and not isinstance(server_config.get("command"), str):
+        issues.append(f"Server '{name}': 'command' must be a string")
+    
+    # args must be list if present
+    if "args" in server_config and not isinstance(server_config.get("args"), list):
+        issues.append(f"Server '{name}': 'args' must be a list of strings")
+    
+    # env must be dict if present
+    if "env" in server_config and not isinstance(server_config.get("env"), dict):
+        issues.append(f"Server '{name}': 'env' must be a dict of KEY=VALUE pairs")
+    
+    # connect_timeout must be number if present
+    if "connect_timeout" in server_config:
+        raw_ct = server_config.get("connect_timeout")
+        try:
+            float(raw_ct)  # raises TypeError/ValueError if not coercible
+        except (TypeError, ValueError):
+            issues.append(f"Server '{name}': 'connect_timeout' must be a number (seconds)")
+        except Exception:
+            issues.append(f"Server '{name}': 'connect_timeout' must be a number (seconds)")
+    # tools must be dict with include/exclude as lists
+    tools = server_config.get("tools")
+    if tools is not None:
+        if not isinstance(tools, dict):
+            issues.append(f"Server '{name}': 'tools' must be an object with 'include' and/or 'exclude' arrays")
+        else:
+            for key in ("include", "exclude"):
+                val = tools.get(key)
+                if val is not None and not isinstance(val, list):
+                    issues.append(f"Server '{name}': 'tools.{key}' must be a list")
+    
+    # headers must be dict if present
+    if "headers" in server_config and not isinstance(server_config.get("headers"), dict):
+        issues.append(f"Server '{name}': 'headers' must be a dict")
+    
+    # enabled must be boolean if present
+    if "enabled" in server_config and not isinstance(server_config.get("enabled"), bool):
+        issues.append(f"Server '{name}': 'enabled' must be true or false")
+    
+    # description must be string if present
+    if "description" in server_config and not isinstance(server_config.get("description"), str):
+        issues.append(f"Server '{name}': 'description' must be a string")
+    
+    return issues
 
 
 def _lookup_server(
@@ -413,11 +503,10 @@ def _resolve_mcp_server_config(config: dict) -> dict:
 
 def _probe_single_server(
     name: str, config: dict, connect_timeout: Optional[float] = None, *, details: Optional[dict] = None
-) -> List[Tuple[str, str]]:
+) -> List[dict]:
     """Temporarily connect to one MCP server, list its tools, disconnect.
 
-    Returns ``(tool_name, description)`` tuples; raises on connection failure. ``details`` is an
-    out-param filled with ``schema_chars``/``prompts``/``resources`` so the return shape stays stable.
+    Returns list of tool dicts with keys: name, description, inputSchema.
     """
     issues = validate_mcp_server_entry(name, config)
     if issues:
@@ -429,21 +518,30 @@ def _probe_single_server(
     from tools.mcp_tool_common import _parse_boolish
 
     config = _resolve_mcp_server_config(config)
-    if connect_timeout is None:
+    # Determine connect timeout: 
+    # 1. Per-server timeout from config
+    # 2. Command-line connect_timeout override (passed as parameter)
+    # 3. Default 30s
+    timeout = None
+    if 'connect_timeout' in config:
         try:
-            connect_timeout = max(1.0, float(config.get("connect_timeout", 30)))
+            timeout = float(config['connect_timeout'])
         except (TypeError, ValueError):
-            connect_timeout = 30.0
-    # Deep transport code (tools/mcp_tool_transport.py::_negotiate_session) reads its OWN
-    # session.initialize() bound straight off config["connect_timeout"], independent of the
-    # `connect_timeout` param above. Callers that extend the param to give a user time to finish
-    # an OAuth browser flow (e.g. `hermes mcp login`'s 315s) left that inner bound at the
-    # (unrelated) 60s default, so the still-pending OAuth callback wait got cancelled mid-flow —
-    # surfacing as a retry that re-opens a second authorization against the same callback port.
-    config["connect_timeout"] = connect_timeout
+            pass
+    if timeout is None and 'timeout' in config:
+        try:
+            timeout = float(config['timeout'])
+        except (TypeError, ValueError):
+            pass
+    if timeout is None and connect_timeout is not None:
+        timeout = connect_timeout
+    if timeout is None:
+        timeout = 30.0
+    timeout = max(1.0, timeout)  # ensure at least 1s
+    config["connect_timeout"] = timeout
 
     _ensure_mcp_loop()
-    tools_found: List[Tuple[str, str]] = []
+    tools_found: List[dict] = []
 
     async def _probe():
         from tools import mcp_tool as _core
@@ -453,11 +551,10 @@ def _probe_single_server(
         if details is not None:
             details["initialized"] = False
         try:
-            server = await asyncio.wait_for(_connect_server(name, config), timeout=connect_timeout)
+            server = await asyncio.wait_for(_connect_server(name, config), timeout=timeout)
         except asyncio.TimeoutError:
-            # str(TimeoutError()) is '' — printed verbatim it was a blank "Authentication failed:".
             raise TimeoutError(
-                f"Connecting to MCP server '{name}' timed out after {float(connect_timeout):.0f}s "
+                f"Connecting to MCP server '{name}' timed out after {float(timeout):.0f}s "
                 "(bounded by connect_timeout; an OAuth login also by oauth.timeout)"
             ) from None
         finally:
@@ -465,16 +562,18 @@ def _probe_single_server(
             if details is not None and claimed:
                 details["initialized"] = claimed[0].initialize_result is not None
         try:
+            import json as _json
             for t in server._tools:
                 desc = getattr(t, "description", "") or ""
                 if len(desc) > 80:
                     desc = desc[:77] + "..."
-                tools_found.append((t.name, desc))
+                tool_dict = {"name": t.name, "description": desc}
+                schema = getattr(t, "inputSchema", None)
+                if schema and isinstance(schema, dict):
+                    tool_dict["inputSchema"] = schema
+                tools_found.append(tool_dict)
             if details is not None:
-                # Per-tool registry-schema sizes (the SAME converted schema the agent registers) so
-                # the desktop can estimate per-call token cost. Best-effort, absent on failure.
                 try:
-                    import json as _json
                     from tools.mcp_tool_schema import _convert_mcp_schema
 
                     details["schema_chars"] = {
@@ -510,7 +609,7 @@ def _probe_single_server(
             await server.shutdown()
 
     try:
-        _run_on_mcp_loop(_probe(), timeout=connect_timeout + 10)
+        _run_on_mcp_loop(_probe(), timeout=timeout + 10)
     except BaseException as exc:
         raise _redact_probe_exception(exc) from None
     finally:
@@ -576,7 +675,7 @@ def _configure_http_auth(
     return True
 
 
-def _choose_tools(name: str, tools: List[Tuple[str, str]], server_config: Dict[str, Any]) -> Optional[int]:
+def _choose_tools(name: str, tools: List[dict], server_config: Dict[str, Any]) -> Optional[int]:
     """Ask enable-all / select / cancel; returns the enabled-tool count or None when cancelled."""
     print()
     _success(f"Connected! Found {len(tools)} tool(s) from '{name}':")
@@ -598,12 +697,23 @@ def _choose_tools(name: str, tools: List[Tuple[str, str]], server_config: Dict[s
         return len(tools)
     from hermes_cli.curses_ui import curses_checklist
 
-    labels = [f"{t[0]}  —  {t[1]}" for t in tools]
+    labels = []
+    for t in tools:
+        label = f"{t['name']}  —  {t.get('description', '')}"
+        schema = t.get("inputSchema")
+        if schema and isinstance(schema, dict):
+            props = list(schema.get("properties", {}).keys())
+            if props:
+                param_str = ", ".join(props[:3])
+                if len(props) > 3:
+                    param_str += "..."
+                label += f"  [params: {param_str}]"
+        labels.append(label)
     chosen = curses_checklist(f"Select tools for '{name}'", labels, set(range(len(tools))))
     if not chosen:
         _info("No tools selected — server not saved.")
         return None
-    chosen_names = [tools[i][0] for i in sorted(chosen)]
+    chosen_names = [tools[i]["name"] for i in sorted(chosen)]
     server_config.setdefault("tools", {})["include"] = chosen_names
     return len(chosen_names)
 
@@ -612,6 +722,7 @@ def cmd_mcp_add(args):
     """Add a new MCP server with discovery-first tool selection."""
     name = args.name
     url = getattr(args, "url", None)
+    dry_run = getattr(args, "dry_run", False)
     # --command uses dest="mcp_command" (see hermes_cli/main.py for why the dest is renamed).
     command = getattr(args, "mcp_command", None)
     cmd_args = getattr(args, "args", None) or []
@@ -687,6 +798,12 @@ def cmd_mcp_add(args):
     if tool_count is None:
         return
     server_config["enabled"] = True
+    if dry_run:
+        import yaml
+        _success(f"Dry run: would save '{name}' with {tool_count}/{len(tools)} tools enabled")
+        _info("Config that would be saved:")
+        print(yaml.dump({name: server_config}, default_flow_style=False))
+        return
     if _save_mcp_server(name, server_config):
         print()
         _success(
@@ -991,6 +1108,63 @@ def _rebuild_exclude_list(
     return glob_entries + sorted(new_literals)
 
 
+def cmd_mcp_status(args):
+    """Show status of all configured MCP servers."""
+    servers = _get_mcp_servers()
+    if not servers:
+        _info("No MCP servers configured.")
+        return
+
+    print()
+    print(color("  MCP Server Status:", Colors.CYAN + Colors.BOLD))
+    print()
+    print(f"  {'Name':<20} {'Status':<12} {'Response Time':<15} {'Tools':<10} {'Transport'}")
+    print(f"  {'─' * 20} {'─' * 12} {'─' * 15} {'─' * 10} {'─' * 30}")
+
+    for name, cfg in servers.items():
+        # Determine transport string
+        if "url" in cfg:
+            transport = cfg["url"]
+            if len(transport) > 28:
+                transport = transport[:25] + "..."
+        elif "command" in cfg:
+            transport = cfg["command"]
+            cmd_args = cfg.get("args", [])
+            if isinstance(cmd_args, list) and cmd_args:
+                transport = f"{transport} {' '.join(str(a) for a in cmd_args[:2])}"
+                if len(transport) > 28:
+                    transport = transport[:25] + "..."
+        else:
+            transport = "?"
+
+        # Test connection with short timeout
+        start_time = time.monotonic()
+        try:
+            tools = _probe_single_server(name, cfg, connect_timeout=5.0)
+            response_time = (time.monotonic() - start_time) * 1000  # ms
+            status = color("● online", Colors.GREEN)
+            tools_count = len(tools)
+        except Exception:
+            response_time = (time.monotonic() - start_time) * 1000
+            status = color("● offline", Colors.RED)
+            tools_count = 0
+
+        # Format response time
+        if response_time < 1000:
+            time_str = f"{response_time:.0f}ms"
+        else:
+            time_str = f"{response_time/1000:.1f}s"
+
+        enabled = cfg.get("enabled", True)
+        if isinstance(enabled, str):
+            enabled = enabled.lower() in {"true", "1", "yes"}
+        if not enabled:
+            status = color("○ disabled", Colors.DIM)
+
+        print(f"  {name:<20} {status:<12} {time_str:<15} {tools_count:<10} {transport}")
+    print()
+
+
 def cmd_mcp_configure(args):
     """Reconfigure which tools are enabled for an existing MCP server."""
     import sys as _sys
@@ -1014,7 +1188,7 @@ def cmd_mcp_configure(args):
         return
 
     include, exclude = _tool_filters(cfg)
-    tool_names = [t[0] for t in all_tools]
+    tool_names = [t["name"] for t in all_tools]
     total = len(all_tools)
 
     # Same matching semantics as runtime registration (tools/mcp_tool.py): exact names or globs.
@@ -1036,7 +1210,7 @@ def cmd_mcp_configure(args):
 
     from hermes_cli.curses_ui import curses_checklist
 
-    labels = [f"{t[0]}  —  {t[1]}" for t in all_tools]
+    labels = [f"{t['name']}  —  {t.get('description', '')}" for t in all_tools]
     chosen = curses_checklist(f"Select tools for '{name}'", labels, pre_selected)
     if chosen == pre_selected:
         _info("No changes made.")
@@ -1067,6 +1241,105 @@ def cmd_mcp_configure(args):
     _info("Start a new session for changes to take effect.")
 
 
+def cmd_mcp_validate(args):
+    """Validate MCP server config against expected schema."""
+    servers = _get_mcp_servers()
+    if not servers:
+        _info("No MCP servers configured.")
+        return
+
+    print()
+    print(color("  MCP Config Validation:", Colors.CYAN + Colors.BOLD))
+    print()
+    all_issues: List[str] = []
+    for name, cfg in servers.items():
+        schema_issues = _validate_mcp_schema(name, cfg)
+        security_issues = validate_mcp_server_entry(name, cfg)
+        issues = schema_issues + security_issues
+        
+        if issues:
+            _warning(f"  {name}:")
+            for issue in issues:
+                print(f"    {color('⚠', Colors.YELLOW)} {issue}")
+            all_issues.extend(issues)
+        else:
+            _success(f"  {name}: OK")
+
+    print()
+    if all_issues:
+        _error(f"Found {len(all_issues)} issue(s) across {len(servers)} server(s)")
+    else:
+        _success(f"All {len(servers)} server(s) passed validation")
+
+
+def cmd_mcp_refresh(args):
+    """Refresh the discovered tool list for an MCP server.
+
+    Re-probes the server and updates the include/exclude lists to reflect
+    tools that are no longer available (removed from the server).
+    """
+    name = args.name
+    cfg = _lookup_server(name, _get_mcp_servers(), "Available")
+    if cfg is None:
+        return
+
+    print()
+    print(color(f"  Refreshing '{name}'...", Colors.CYAN))
+    try:
+        all_tools = _probe_single_server(name, cfg)
+    except Exception as exc:
+        _error(f"Failed to connect: {_probe_failure_reason(exc)}")
+        _info(_probe_failure_next_step(name, exc))
+        return
+    if not all_tools:
+        _warning("Server reports no tools.")
+        return
+
+    tool_names = {t["name"] for t in all_tools}
+    include, exclude = _tool_filters(cfg)
+    config = load_config()
+    server_entry = cfg_get(config, "mcp_servers", name, default={})
+    changed = False
+
+    if include is not None:
+        old_include = [str(t) for t in include]
+        new_include = [t for t in old_include if t in tool_names]
+        if set(old_include) != set(new_include):
+            removed = set(old_include) - set(new_include)
+            _info(f"Removing {len(removed)} tool(s) that no longer exist: {', '.join(removed)}")
+            if new_include:
+                server_entry.setdefault("tools", {})["include"] = new_include
+            else:
+                server_entry.pop("tools", None)
+                _warning("No included tools remain — server will be disabled.")
+                server_entry["enabled"] = False
+            changed = True
+
+    if exclude:
+        old_exclude = [str(t) for t in exclude]
+        glob_patterns = [t for t in old_exclude if "*" in t or "?" in t or "[" in t]
+        literal_excludes = [t for t in old_exclude if t not in glob_patterns]
+        new_lit = [t for t in literal_excludes if t in tool_names]
+        if set(literal_excludes) != set(new_lit):
+            removed = set(literal_excludes) - set(new_lit)
+            _info(f"Removing {len(removed)} obsolete exclude entry(ies): {', '.join(removed)}")
+            if glob_patterns or new_lit:
+                server_entry.setdefault("tools", {})["exclude"] = glob_patterns + sorted(new_lit)
+                server_entry["tools"].pop("include", None)
+            else:
+                server_entry.pop("tools", None)
+            changed = True
+
+    if not changed:
+        _info("No stale tool references found — config is up to date.")
+        return
+
+    config.setdefault("mcp_servers", {})[name] = server_entry
+    save_config(config)
+    _success(f"Updated '{name}' config to match current tool set ({len(tool_names)} available)")
+    _info("Start a new session for changes to take effect.")
+
+
 _MCP_USAGE = (
     "hermes mcp                                    Open the catalog picker (default)",
     "hermes mcp catalog                            List Nous-approved MCPs",
@@ -1078,7 +1351,10 @@ _MCP_USAGE = (
     "hermes mcp remove <name>                      Remove a server",
     "hermes mcp list                               List configured servers",
     "hermes mcp test <name>                        Test connection",
+    "hermes mcp status                             Show server status dashboard",
     "hermes mcp configure <name>                   Toggle tools",
+    "hermes mcp validate                           Validate server config schema",
+    "hermes mcp refresh <name>                     Refresh discovered tool list",
     "hermes mcp login <name>                       Re-authenticate OAuth",
     "hermes mcp reauth <name> | --all              Re-auth one or all OAuth servers",
 )
@@ -1108,7 +1384,9 @@ def mcp_command(args):
     handler = {
         "add": cmd_mcp_add, "remove": cmd_mcp_remove, "rm": cmd_mcp_remove, "list": cmd_mcp_list,
         "ls": cmd_mcp_list, "test": cmd_mcp_test, "configure": cmd_mcp_configure,
-        "config": cmd_mcp_configure, "login": cmd_mcp_login, "reauth": cmd_mcp_reauth,
+        "config": cmd_mcp_configure, "status": cmd_mcp_status, "refresh": cmd_mcp_refresh,
+        "validate": cmd_mcp_validate,
+        "login": cmd_mcp_login, "reauth": cmd_mcp_reauth,
     }.get(action)
     if handler:
         # A handler's int return is the process exit code (``main()`` exits non-zero on it).

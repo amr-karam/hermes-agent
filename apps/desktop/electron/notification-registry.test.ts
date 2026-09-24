@@ -11,7 +11,11 @@ it('retains a dismissed banner until its later click or action is consumed', () 
   const registry = createNotificationRegistry()
 
   for (const event of ['click', 'action']) {
-    const notification = Object.assign(new EventEmitter(), { close: vi.fn() })
+    const notification = Object.assign(new EventEmitter(), {
+      close: vi.fn(),
+      show: vi.fn().mockResolvedValue(undefined)
+    }) as any
+
     const handler = vi.fn()
     notification.on(event, handler)
     registry.retain(notification)
@@ -28,8 +32,8 @@ it('retains a dismissed banner until its later click or action is consumed', () 
 it('releases terminal closes immediately when opted in without expiring unrelated notifications early', () => {
   vi.useFakeTimers()
   const registry = createNotificationRegistry({ ttlMs: 1000, releaseOnClose: true })
-  const closed = Object.assign(new EventEmitter(), { close: vi.fn() })
-  const active = Object.assign(new EventEmitter(), { close: vi.fn() })
+  const closed = Object.assign(new EventEmitter(), { close: vi.fn(), show: vi.fn() })
+  const active = Object.assign(new EventEmitter(), { close: vi.fn(), show: vi.fn() })
   registry.retain(closed)
   registry.retain(active)
   const timersBeforeClose = vi.getTimerCount()
@@ -54,7 +58,8 @@ it('dismisses an expired notification before releasing it and releases failed de
   const registry = createNotificationRegistry({ ttlMs: 1000 })
 
   const notification = Object.assign(new EventEmitter(), {
-    close: vi.fn(() => expect(registry.has(notification)).toBe(true))
+    close: vi.fn(() => expect(registry.has(notification)).toBe(true)),
+    show: vi.fn()
   })
 
   registry.retain(notification)
@@ -62,7 +67,7 @@ it('dismisses an expired notification before releasing it and releases failed de
   expect(notification.close).toHaveBeenCalledOnce()
   expect(registry.has(notification)).toBe(false)
 
-  const failed = Object.assign(new EventEmitter(), { close: vi.fn() })
+  const failed = Object.assign(new EventEmitter(), { close: vi.fn(), show: vi.fn() })
   registry.retain(failed)
   failed.emit('failed')
   expect(registry.has(failed)).toBe(false)

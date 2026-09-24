@@ -6,11 +6,12 @@ import { useDebounced } from '@/app/hooks/use-debounced'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { Button } from '@/components/ui/button'
 import { SegmentedControl } from '@/components/ui/segmented-control'
+import { Switch } from '@/components/ui/switch'
 import type { DesktopMarketplaceSearchItem } from '@/global'
 import { saveHermesConfig } from '@/hermes'
 import { useI18n } from '@/i18n'
 import { triggerHaptic } from '@/lib/haptics'
-import { Check, Download, Loader2, Palette, Trash2 } from '@/lib/icons'
+import { Check, Download, Loader2, Palette, Trash2, Cpu } from '@/lib/icons'
 import { selectableCardClass } from '@/lib/selectable-card'
 import { normalize } from '@/lib/text'
 import { cn } from '@/lib/utils'
@@ -30,6 +31,29 @@ import { $activeGatewayProfile, $profiles, normalizeProfileKey } from '@/store/p
 import { $reactionsEnabled, setReactionsEnabled } from '@/store/reactions-enabled'
 import { $reasoningCollapsedByDefault, setReasoningCollapsedByDefault } from '@/store/reasoning-disclosure'
 import { $sessionListDensity, type SessionListDensity, setSessionListDensity } from '@/store/session-list-density'
+import {
+  $surfaceSettings,
+  chooseAndSetWallpaper,
+  chooseDarkWallpaper,
+  chooseSlideshowFolder,
+  clearWallpaper,
+  hydrateSurfaceSettings,
+  setSlideshowEnabled,
+  setSlideshowInterval,
+  setSlideshowShuffle,
+  setSurfaceWallpaperBlur,
+  setSurfaceWallpaperOpacity,
+  SURFACE_WALLPAPER_SUPPORTED
+} from '@/store/surface-settings'
+import {
+  $orchestrator,
+  $orchestratorSettings,
+  checkOrchestratorHealth,
+  orchestrate,
+  setOrchestratorMode,
+  setOrchestratorPrimaryModel,
+  setOrchestratorSecondaryModel
+} from '@/store/orchestrator'
 import { $tabStripDefault, setTabStripDefault, type TabStripDefault } from '@/store/tabstrip-prefs'
 import { $textDirection, setTextDirection, TEXT_DIRECTIONS, type TextDirection } from '@/store/text-direction'
 import { $hideThreadTimeline, setHideThreadTimeline } from '@/store/thread-timeline'
@@ -72,6 +96,7 @@ import { $marketplaceInstalls, isUserTheme, removeUserTheme } from '@/themes/use
 
 import { setHermesConfigCache, useHermesConfigRecord } from '../hooks/use-config-record'
 
+import { AnimatedSlideshowIcon, AnimatedWallpaperIcon } from './animated-surface-icons'
 import { appearanceSubpageForSetting, type AppearanceSubpageId } from './appearance-subpages'
 import { ChatFontSetting } from './chat-font-setting'
 import { MODE_OPTIONS } from './constants'
@@ -171,6 +196,114 @@ function ThemePreview({ name, mode }: { name: string; mode: 'light' | 'dark' }) 
 // exact current percent.
 const UI_SCALE_PRESETS = ['90', '100', '110', '125', '150', '175'] as const
 const appearanceSettingElementId = (id: string) => `setting-field-${id}`
+
+function OrchestratorSection() {
+  const { t } = useI18n()
+  const a = t.settings.appearance
+  const settings = useStore($orchestratorSettings)
+  const state = useStore($orchestrator)
+  const [healthy, setHealthy] = useState<{ primary: boolean; secondary: boolean } | null>(null)
+
+  useEffect(() => {
+    void Promise.all([
+      checkOrchestratorHealth(settings.primaryUrl),
+      checkOrchestratorHealth(settings.secondaryUrl)
+    ]).then(([p, s]) => setHealthy({ primary: p, secondary: s }))
+  }, [settings.primaryUrl, settings.secondaryUrl])
+
+  const modeOptions = [
+    { id: 'fanout', label: a.orchestratorFanout },
+    { id: 'debate', label: a.orchestratorDebate },
+    { id: 'delegate', label: a.orchestratorDelegate }
+  ]
+
+  return (
+    <ListRow
+      action={
+        <div className="flex items-center gap-2">
+          {healthy && (
+            <span className="min-w-0 flex-1 text-[0.68rem] font-mono text-muted-foreground">
+              {healthy.primary ? '●' : '○'} primary · {healthy.secondary ? '●' : '○'} secondary
+            </span>
+          )}
+          {state.busy ? (
+            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+          ) : (
+            <Button
+              onClick={() => { void orchestrate('').catch(() => {}) }}
+              size="sm"
+              type="button"
+              variant="outline"
+              disabled={state.busy}
+            >
+              {a.orchestratorRun}
+            </Button>
+          )}
+        </div>
+      }
+      below={
+        !healthy ? (
+          <span className="mt-1 block text-[0.68rem] text-muted-foreground">{a.orchestratorUnavailable}</span>
+        ) : (
+          <div className="mt-3 flex flex-col gap-2.5">
+            <div className="flex items-center gap-3">
+              <span className="w-24 shrink-0 text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">
+                {a.orchestratorModeTitle}
+              </span>
+              <SegmentedControl
+                onChange={id => {
+                  triggerHaptic('selection')
+                  setOrchestratorMode(id as 'fanout' | 'debate' | 'delegate')
+                }}
+                options={modeOptions}
+                value={settings.mode}
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="w-24 shrink-0 text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">
+                {a.orchestratorPrimaryModel}
+              </span>
+              <input
+                className="h-7 flex-1 rounded-md border border-(--ui-stroke-tertiary) bg-transparent px-2 text-[length:var(--conversation-caption-font-size)] font-mono"
+                onChange={event => setOrchestratorPrimaryModel(event.target.value)}
+                value={settings.primaryModel}
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="w-24 shrink-0 text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">
+                {a.orchestratorSecondaryModel}
+              </span>
+              <input
+                className="h-7 flex-1 rounded-md border border-(--ui-stroke-tertiary) bg-transparent px-2 text-[length:var(--conversation-caption-font-size)] font-mono"
+                onChange={event => setOrchestratorSecondaryModel(event.target.value)}
+                value={settings.secondaryModel}
+              />
+            </div>
+            {state.error && (
+              <span className="mt-1 block text-[0.68rem] text-red-500">{state.error}</span>
+            )}
+            {state.results && (
+              <div className="mt-1 flex flex-col gap-1">
+                {state.results.map((r, i) => (
+                  <pre key={i} className="rounded-md border border-(--ui-stroke-tertiary)/40 bg-(--ui-bg-tertiary) p-2 text-[0.68rem] leading-tight">
+                    {r}
+                  </pre>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      }
+      description={a.orchestratorModeDesc}
+      title={
+        <span className="flex items-center gap-2">
+          <Cpu className="size-4 text-muted-foreground" />
+          {a.orchestratorTitle}
+        </span>
+      }
+    />
+  )
+}
 
 type UiScalePreset = (typeof UI_SCALE_PRESETS)[number]
 
@@ -442,6 +575,7 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
   const vibeHeartsEnabled = useStore($vibeHeartsEnabled)
   const backdrop = useStore($backdrop)
   const introSplash = useStore($introSplash)
+  const surface = useStore($surfaceSettings)
   const installs = useStore($marketplaceInstalls)
   const profiles = useStore($profiles)
   const activeProfileKey = normalizeProfileKey(useStore($activeGatewayProfile))
@@ -452,6 +586,14 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
   // counter above zero and ghost the NEXT settings overlay. Leaving a subpage
   // also unmounts its sliders, so drop every outstanding hold on that change.
   useEffect(() => resetTranslucencyPeek, [subpage])
+
+  // Surface settings (wallpaper/slideshow) are authoritative in main — pull
+  // the copy once so these rows paint real values instead of defaults.
+  useEffect(() => {
+    if (SURFACE_WALLPAPER_SUPPORTED) {
+      void hydrateSurfaceSettings()
+    }
+  }, [])
 
   // Shared by the mode/frost/area pickers: apply the choice, then show it
   // through the overlay it just altered (a pulse, not a hold — see the peek
@@ -469,6 +611,17 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
 
   const [query, setQuery] = useState('')
   const show = (id: AppearanceSubpageId) => subpage === undefined || subpage === id
+
+  // A wallpaper action resolved: toast only a real apply failure (cancel is ok).
+  const runSurfaceAction = (action: Promise<{ ok: boolean; error?: string }>) => {
+    void action
+      .then(result => {
+        if (!result.ok) {
+          notifyError(result.error ?? '', a.wallpaperFailed)
+        }
+      })
+      .catch(error => notifyError(error, a.wallpaperFailed))
+  }
 
   useDeepLinkHighlight({
     elementId: appearanceSettingElementId,
@@ -713,24 +866,6 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
                 <SegmentedControl
                   onChange={id => {
                     triggerHaptic('selection')
-                    setInterfaceMode(id)
-                  }}
-                  options={interfaceModeOptions}
-                  value={interfaceMode}
-                />
-              }
-              description={t.interfaceMode.hint}
-              id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.interfaceMode)}
-              title={t.interfaceMode.title}
-            />
-          )}
-
-          {show('window-layout') && (
-            <ListRow
-              action={
-                <SegmentedControl
-                  onChange={id => {
-                    triggerHaptic('selection')
                     setSessionListDensity(id)
                   }}
                   options={sessionDensityOptions}
@@ -867,7 +1002,160 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
             />
           )}
 
-          {show('chat-display') && (
+          {/* Wallpaper/slideshow are OS-level (see SURFACE_WALLPAPER_SUPPORTED)
+              — absent on Linux rather than offering a dead lever. */}
+          {show('window-layout') && SURFACE_WALLPAPER_SUPPORTED && (
+            <ListRow
+              action={
+                <div className="flex items-center justify-end gap-2">
+                  <Button onClick={() => runSurfaceAction(chooseAndSetWallpaper())} size="sm" type="button" variant="outline">
+                    {a.wallpaperChoose}
+                  </Button>
+                  {(surface.wallpaper.path || surface.wallpaper.darkPath) && (
+                    <Button
+                      aria-label={a.wallpaperClear}
+                      onClick={() => runSurfaceAction(clearWallpaper())}
+                      size="sm"
+                      type="button"
+                      variant="ghost"
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  )}
+                </div>
+              }
+              below={
+                <div className="mt-3 flex flex-col gap-2.5">
+                  <div className="flex items-center gap-3">
+                    <span className="w-24 shrink-0 text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">
+                      {a.wallpaperOpacity}
+                    </span>
+                    <TranslucencySlider
+                      label={a.wallpaperOpacity}
+                      onChange={setSurfaceWallpaperOpacity}
+                      value={surface.wallpaper.opacity}
+                    />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="w-24 shrink-0 text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">
+                      {a.wallpaperBlur}
+                    </span>
+                    <TranslucencySlider label={a.wallpaperBlur} onChange={setSurfaceWallpaperBlur} value={surface.wallpaper.blur} />
+                  </div>
+                  <div className="flex flex-col gap-1.5 rounded-md border border-(--ui-stroke-tertiary)/60 p-2.5">
+                    <div className="text-[length:var(--conversation-caption-font-size)] font-medium text-(--ui-text-secondary)">
+                      {a.wallpaperDarkTitle}
+                    </div>
+                    <div className="text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
+                      {a.wallpaperDarkDesc}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        onClick={() => runSurfaceAction(chooseDarkWallpaper())}
+                        size="sm"
+                        type="button"
+                        variant="outline"
+                      >
+                        {a.wallpaperDarkChoose}
+                      </Button>
+                      {surface.wallpaper.darkPath && (
+                        <span className="min-w-0 truncate font-mono text-[0.68rem] text-muted-foreground">
+                          {surface.wallpaper.darkPath.split(/[\\/]/).pop()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              }
+              description={a.wallpaperDesc}
+              hint={surface.wallpaper.path ? surface.wallpaper.path.split(/[\\/]/).pop() : undefined}
+              id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.wallpaper)}
+              title={
+                <span className="flex items-center gap-2">
+                  <AnimatedWallpaperIcon active={surface.slideshow.enabled} />
+                  {a.wallpaperTitle}
+                </span>
+              }
+            />
+          )}
+
+          {show('window-layout') && SURFACE_WALLPAPER_SUPPORTED && (
+            <ListRow
+              action={
+                <div className="flex items-center justify-end gap-2">
+                  <Button onClick={() => void chooseSlideshowFolder()} size="sm" type="button" variant="outline">
+                    {a.slideshowFolderChoose}
+                  </Button>
+                  <Switch
+                    aria-label={a.slideshowTitle}
+                    checked={surface.slideshow.enabled}
+                    onCheckedChange={on => {
+                      triggerHaptic('selection')
+                      setSlideshowEnabled(on)
+                    }}
+                  />
+                </div>
+              }
+              below={
+                surface.slideshow.enabled ? (
+                  <div className="mt-3 flex flex-col gap-2.5">
+                    {surface.slideshow.folder && (
+                      <div className="min-w-0 truncate font-mono text-[0.68rem] text-muted-foreground">
+                        {surface.slideshow.folder.split(/[\\/]/).pop()}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-3">
+                      <span className="w-24 shrink-0 text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">
+                        {a.slideshowInterval}
+                      </span>
+                      <input
+                        aria-label={a.slideshowInterval}
+                        className="h-7 w-16 rounded-md border border-(--ui-stroke-tertiary) bg-transparent px-2 text-[length:var(--conversation-caption-font-size)] tabular-nums"
+                        min={1}
+                        onChange={event => {
+                          const minutes = Math.round(Number(event.target.value))
+
+                          if (Number.isFinite(minutes) && minutes >= 1) {
+                            triggerHaptic('selection')
+                            setSlideshowInterval(minutes)
+                          }
+                        }}
+                        type="number"
+                        value={surface.slideshow.intervalMinutes}
+                      />
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="w-24 shrink-0 text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">
+                        {a.slideshowShuffle}
+                      </span>
+                      <Switch
+                        aria-label={a.slideshowShuffle}
+                        checked={surface.slideshow.shuffle}
+                        onCheckedChange={on => {
+                          triggerHaptic('selection')
+                          setSlideshowShuffle(on)
+                        }}
+                      />
+                    </div>
+                  </div>
+                ) : undefined
+              }
+              description={a.slideshowDesc}
+              id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.slideshow)}
+              title={
+                 <span className="flex items-center gap-2">
+                   <AnimatedSlideshowIcon running={surface.slideshow.enabled} />
+                   {a.slideshowTitle}
+                 </span>
+               }
+             />
+           )}
+
+           {show('window-layout') && (
+             <OrchestratorSection />
+           )}
+
+           {show('chat-display') && (
             <ListRow
               action={
                 // Same peek as the window lever: the bubble being tuned sits
@@ -884,24 +1172,6 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
               description={a.userBubbleDesc}
               id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.userBubble)}
               title={a.userBubbleTitle}
-            />
-          )}
-
-          {show('chat-display') && (
-            <ListRow
-              action={
-                <SegmentedControl
-                  onChange={id => {
-                    triggerHaptic('selection')
-                    setTextDirection(id)
-                  }}
-                  options={textDirectionOptions}
-                  value={textDirection}
-                />
-              }
-              description={a.textDirectionDesc}
-              id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.textDirection)}
-              title={a.textDirectionTitle}
             />
           )}
 
