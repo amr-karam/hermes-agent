@@ -91,7 +91,7 @@ class JsonRpcChannel(
     fun disconnect() {
         webSocket?.close(1000, "client disconnect")
         webSocket = null
-        _connectionState.postValue(ConnectionState.Closed)
+        _connectionState.value = ConnectionState.Closed
         coroutineScope.cancel()
     }
 
@@ -117,7 +117,7 @@ class JsonRpcChannel(
             val content = payload["content"]?.jsonPrimitive?.content
             if (content != null) {
                 val msg = ChatMessage(role = "assistant", text = content, streaming = false)
-                _messages.postValue(listOf(msg))
+                _messages.value = listOf(msg)
                 onComplete?.invoke()
             }
             return
@@ -127,24 +127,24 @@ class JsonRpcChannel(
                 val delta = payload["delta"]?.jsonObject
                 val text = delta?.get("text")?.jsonPrimitive?.content ?: ""
                 streamingText += text
-                val msg = ChatMessage(role = "assistant", text = streamingText, streaming = true)
-                _messages.postValue(listOf(msg))
+                val msg = ChatMessage(role = "assistant", text = streamingText, isStreaming = true)
+                _messages.value = listOf(msg)
                 onStreamingText?.invoke(text)
             }
             "message.complete", "message.interim" -> {
                 val delta = payload["delta"]?.jsonObject
                 val text = delta?.get("text")?.jsonPrimitive?.content ?: ""
                 streamingText += text
-                val msg = ChatMessage(role = "assistant", text = streamingText, streaming = false)
-                _messages.postValue(listOf(msg))
+                val msg = ChatMessage(role = "assistant", text = streamingText, isStreaming = false)
+                _messages.value = listOf(msg)
                 onComplete?.invoke()
             }
             else -> {
                 val content = payload["content"]?.jsonPrimitive?.content
                     ?: payload["text"]?.jsonPrimitive?.content
                 if (content != null) {
-                    val msg = ChatMessage(role = "assistant", text = content, streaming = false)
-                    _messages.postValue(listOf(msg))
+val msg = ChatMessage(role = "assistant", text = content, isStreaming = false)
+                    _messages.value = listOf(msg)
                     onComplete?.invoke()
                 }
             }
@@ -165,5 +165,5 @@ sealed class ConnectionState {
 data class ChatMessage(
     val role: String,
     val text: String = "",
-    val streaming: Boolean = false,
+    val isStreaming: Boolean = false,
 )
