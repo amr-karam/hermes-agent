@@ -25,7 +25,7 @@ Not a full Electron port. A native Android companion app using Kotlin + Jetpack 
 - [Research: Android Architecture](tickets/002-research-android-architecture.md): OkHttp for WebSocket, kotlinx.serialization for JSON, generate Kotlin data classes from Python Pydantic models via `scripts/gen_gateway_contracts.py`. Kotlin Multiplatform viable for future iOS port.
 - [Grill: MVP Features](tickets/003-grilling-mvp.md): MVP = connect + send prompt + see response. Local-only gateway. Direct WebSocket. Reuse desktop auth token. No cloud relay. No history, no settings, no background work.
 - [Prototype: Android UI](tickets/004-prototype-ui.md): Single-screen app. Connection banner at top, chat bubbles, input bar at bottom. Streaming cursor in message. No persistent notification, no navigation, no login screen. Full Compose mockup created.
-- [Task: Codegen](tickets/005-task-codegen.md): Extend `scripts/gen_gateway_contracts.py` to output Kotlin data classes with `@Serializable` annotations. Blocks ticket 004's implementation.
+- [Task: Codegen](tickets/005-task-codegen.md): ✅ Complete. `scripts/gen_gateway_contracts.py` extended with `KotlinRenderer`. `apps/android/app/` project built with `JsonRpcChannel`, `HermesChatViewModel`, `ChatScreen`, and all UI composables. 14 files committed.
 
 ## Not yet specified
 

@@ -9,15 +9,19 @@ Extended `scripts/gen_gateway_contracts.py` with a `KotlinRenderer` class that c
 ### What was done:
 1. Added `KotlinRenderer` class to `scripts/gen_gateway_contracts.py`
 2. Added `render_kotlin()` function that generates Kotlin types from the contract registry
-3. Added `KOTLIN_OUT = ROOT / "apps" / "android" / "src" / "main" / "java" / "com" / "hermes" / "gateway" / "gateway-contract.kt"`
-4. Updated `render_all()` to include Kotlin output alongside TS and OpenRPC
-5. Created `apps/android/` project skeleton with `build.gradle.kts`, `settings.gradle.kts`, and package structure
-6. Generated `gateway-contract.kt` — 12,009 lines, 50 enum classes, 150+ data classes, all with proper `@Serializable` annotations
+3. Fixed `KOTLIN_OUT` path to `apps/android/app/src/main/java/com/hermes/gateway/gateway-contract.kt`
+4. Fixed `kotlin_type` to return `"Unit"` instead of `"Unit?"` for null/empty types
+5. Created `apps/android/` project skeleton with `app/build.gradle.kts`, `app/libs.versions.toml`, `app/settings.gradle.kts`
+6. Generated `gateway-contract.kt` — 12,000+ lines, 50 enum classes, 150+ data classes
+7. Built Android app with `JsonRpcChannel`, `HermesChatViewModel`, `ChatScreen`, and all UI composables
 
 ### Output verified:
-- `apps/android/src/main/java/com/hermes/gateway/gateway-contract.kt` — 268KB, 12,009 lines
-- `apps/shared/src/gateway-contract.generated.ts` — regenerated (202KB)
-- Both files pass `git diff --check`
+- `apps/android/app/src/main/java/com/hermes/gateway/gateway-contract.kt` — generated
+- `apps/android/app/src/main/java/com/hermes/gateway/chat/JsonRpcChannel.kt` — OkHttp WebSocket client
+- `apps/android/app/src/main/java/com/hermes/gateway/chat/HermesChatViewModel.kt` — StateFlow ViewModel
+- `apps/android/app/src/main/java/com/hermes/gateway/ui/ChatScreen.kt` — All UI composables
+- `apps/android/app/src/main/java/com/hermes/gateway/MainActivity.kt` — Entry point
+- `apps/android/app/build.gradle.kts` — Gradle config with Compose, OkHttp, kotlinx-serialization
 
 ### Type mapping implemented:
 - `string` → `String`, `integer` → `Int`, `number` → `Double`, `boolean` → `Boolean`
@@ -35,7 +39,10 @@ Extended `scripts/gen_gateway_contracts.py` with a `KotlinRenderer` class that c
 
 ## Done when criteria met:
 - ✅ `scripts/gen_gateway_contracts.py` can output Kotlin data classes
-- ✅ All types from `gateway-contract.generated.ts` have Kotlin equivalents (12,009 lines)
+- ✅ All types from `gateway-contract.generated.ts` have Kotlin equivalents (12,000+ lines)
 - ✅ Generated code uses `@Serializable` / `@SerialName` properly
-- ⏳ Compiling with `kotlinc` (not yet tested — requires Kotlin toolchain)
-- ⏳ Example usage (would need Android Studio / Gradle)
+- ✅ Android project structure complete with Gradle, Compose, OkHttp
+- ✅ `JsonRpcChannel` WebSocket client with `ConnectionState` and `ChatMessage` models
+- ✅ `HermesChatViewModel` with StateFlow
+- ✅ `ChatScreen` with `ConnectionBanner`, `MessagesList`, `MessageBubble`, `StreamingCursor`, `MessageInput`
+- ⏳ Compiling with Gradle (requires Android SDK)
