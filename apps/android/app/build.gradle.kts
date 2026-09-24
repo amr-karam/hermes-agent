@@ -1,6 +1,7 @@
 plugins {
-    id = "com.android.library"
-    id = "org.jetbrains.kotlin.android"
+    alias = libs.plugins.android.library
+    alias = libs.plugins.kotlin.android
+    alias = libs.plugins.kotlin.serialization
 }
 
 android {
@@ -18,6 +19,13 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    buildFeatures {
+        compose = true
+    }
+    composeOptions {
+        kotlinCompilerExtensionVersion = libs.versions.compose-compiler.get()
+    }
 }
 
 dependencies {
@@ -25,4 +33,9 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)
     implementation(libs.okhttp.coroutines)
+    implementation(libs.compose.ui)
+    implementation(libs.compose.material3)
+    implementation(libs.compose.ui.graphics)
+    implementation(libs.lifecycle.runtime.compose)
+    implementation(libs.activity.compose)
 }

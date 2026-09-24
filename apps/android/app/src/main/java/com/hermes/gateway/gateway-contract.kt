@@ -1279,7 +1279,7 @@ data class ConfigSetParams(
     val key: String
 
     @SerialName("value")
-    val value: Unit?
+    val value: Unit
 
     @SerialName("session_id")
     val session_id: String?
@@ -1401,7 +1401,7 @@ data class SessionLiveInfo(
     val release_date: String
 
     @SerialName("update_behind")
-    val update_behind: Unit??
+    val update_behind: Unit?
 
     @SerialName("update_command")
     val update_command: String
@@ -1768,7 +1768,7 @@ data class ImageGenerateParams(
     val aspect_ratio: String?
 
     @SerialName("probe")
-    val probe: Unit??
+    val probe: Unit?
 
     @SerialName("max_bytes")
     val max_bytes: Int?
@@ -2995,7 +2995,7 @@ data class DisplayLease(
     val holder: LeaseHolder
 
     @SerialName("viewer_id")
-    val viewer_id: Unit?
+    val viewer_id: Unit
 
     @SerialName("viewer_hash")
     val viewer_hash: String?
@@ -4188,7 +4188,7 @@ data class BrowserControllerRegisterParams(
     val capabilities: List<String>?
 
     @SerialName("protocol_version")
-    val protocol_version: Unit??
+    val protocol_version: Unit?
 
     @SerialName("principal_id")
     val principal_id: String?
@@ -4233,13 +4233,13 @@ data class BrowserControllerResultParams(
     val command_id: String
 
     @SerialName("ok")
-    val ok: Unit??
+    val ok: Unit?
 
     @SerialName("result")
-    val result: Unit??
+    val result: Unit?
 
     @SerialName("error")
-    val error: Unit??
+    val error: Unit?
 )
 
 @Serializable
@@ -6118,7 +6118,7 @@ data class PetScaleParams(
     val profile: String?
 
     @SerialName("scale")
-    val scale: Unit?
+    val scale: Unit
 )
 
 @Serializable
@@ -6140,7 +6140,7 @@ data class PromptSubmitParams(
     val profile: String?
 
     @SerialName("text")
-    val text: Unit?
+    val text: Unit
 
     @SerialName("display_kind")
     val display_kind: String?
@@ -6513,7 +6513,7 @@ data class ClarifyLockParams(
     val question_id: String
 
     @SerialName("answer")
-    val answer: Unit?
+    val answer: Unit
 
     @SerialName("profile")
     val profile: String?
@@ -7060,7 +7060,7 @@ data class TranscriptMessage(
     val display_kind: String?
 
     @SerialName("display_metadata")
-    val display_metadata: Unit??
+    val display_metadata: Unit?
 
     @SerialName("name")
     val name: String?
@@ -7684,7 +7684,7 @@ data class SessionCwdSetResult(
     val release_date: String
 
     @SerialName("update_behind")
-    val update_behind: Unit??
+    val update_behind: Unit?
 
     @SerialName("update_command")
     val update_command: String
@@ -8897,7 +8897,7 @@ data class RollbackRestoreResult(
     val error: String?
 
     @SerialName("debug")
-    val debug: Unit??
+    val debug: Unit?
 )
 
 @Serializable
@@ -9023,7 +9023,7 @@ data class CronManageResult(
     val message: String?
 
     @SerialName("guidance")
-    val guidance: Unit??
+    val guidance: Unit?
 
     @SerialName("removed_job")
     val removed_job: CronRemovedJob?
@@ -9114,7 +9114,7 @@ data class CronJobRow(
     val monitor_url: String?
 
     @SerialName("monitor_state")
-    val monitor_state: Unit??
+    val monitor_state: Unit?
 
     @SerialName("no_agent")
     val no_agent: Boolean?
@@ -9328,7 +9328,7 @@ data class ReloadMcpResult(
     val turn_isolation: Boolean?
 
     @SerialName("host_ack")
-    val host_ack: Unit??
+    val host_ack: Unit?
 )
 
 @Serializable
@@ -9749,7 +9749,7 @@ data class McpServerSummary(
     val enabled: Boolean
 
     @SerialName("tools")
-    val tools: Unit??
+    val tools: Unit?
 
     @SerialName("source")
     val source: McpServerSource
@@ -10314,10 +10314,10 @@ data class PluginSettingField(
     val required: Boolean
 
     @SerialName("value")
-    val value: Unit??
+    val value: Unit?
 
     @SerialName("default")
-    val default: Unit??
+    val default: Unit?
 
     @SerialName("choices")
     val choices: List<String>?
@@ -10964,7 +10964,7 @@ data class MessageInterimPayload(
 @Serializable
 data class MessageCompletePayload(
     @SerialName("text")
-    val text: String | Unit?
+    val text: String | Unit
 
     @SerialName("usage")
     val usage: Usage?
@@ -11162,7 +11162,7 @@ data class ToolCompletePayload(
     val duration_s: Double?
 
     @SerialName("result")
-    val result: Unit?
+    val result: Unit
 
     @SerialName("summary")
     val summary: String?
