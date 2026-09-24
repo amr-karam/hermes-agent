@@ -29,7 +29,7 @@ class HermesChatViewModel(application: Application) : AndroidViewModel(applicati
                     ConnectionState.Connecting -> ConnectionState.Connecting
                     ConnectionState.Closed -> ConnectionState.Closed
                     ConnectionState.Error -> ConnectionState.Error
-                    else -> ConnectionState.Closed
+                    ConnectionState.Idle -> ConnectionState.Closed
                 }
             }
             channel.messages.collect { messages ->
