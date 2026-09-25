@@ -30,6 +30,9 @@ import { queryClient } from './lib/query-client'
 import { installRendererAnimationPauseState } from './lib/renderer-loop-pause'
 import { installSelectionCopyColorGuard } from './lib/selection-copy-colors'
 import { ThemeProvider } from './themes/context'
+import { CarbonThemeProvider } from './components/carbon'
+import '@carbon/react/index.scss'
+import '@carbon/ibmdotcom-styles/dist/ibm-dotcom-styles.min.css'
 
 installClipboardShim()
 // Chromium serializes selection copies (Cmd+C, right-click Copy) with the
@@ -108,9 +111,11 @@ if (winParam === 'overlay') {
                     the route change commit. The session sidebar highlight + main pane
                     both freeze for seconds despite the main thread being free.
                     Disabling transitions makes navigate() commit at default priority. */}
-                  <HashRouter useTransitions={false}>
-                    <App />
-                  </HashRouter>
+<HashRouter useTransitions={false}>
+  <CarbonThemeProvider>
+    <App />
+  </CarbonThemeProvider>
+</HashRouter>
                 </RootTooltipProvider>
               </HapticsProvider>
             </ThemeProvider>

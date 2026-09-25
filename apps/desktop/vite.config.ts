@@ -126,12 +126,21 @@ export default defineConfig(({ command }) => ({
     // reprocesses our v4 stylesheet, failing the build with
     // "`@layer base` is used but no matching `@tailwind base` directive is
     // present." Pinning the config makes the build hermetic.
-    postcss: { plugins: [] }
+    postcss: { plugins: [] },
+    // Disable lightningcss minification for Carbon Design System CSS which uses
+    // pseudo-element syntax (::before ::after followed by selectors) that
+    // lightningcss cannot parse. This is a known limitation.
+    minify: false
   },
   build: {
     // Validate the packaged generation with metadata checks at launch, without
     // reading every lazy vendor chunk (and triggering on-access AV scans).
     manifest: 'renderer-manifest.json',
+    // Disable minification entirely because lightningcss (Vite 8's default CSS
+    // minifier) cannot parse Carbon Design System's CSS (pseudo-elements like
+    // ::before/::after followed by selectors like `path`). The `css.minify: false`
+    // option doesn't prevent the post-build lightningcss minification step.
+    minify: false,
     // The renderer intentionally ships FEW chunks (not one, not thousands):
     //   · `codeSplitting: false` (the old setup) inlines every `lazy()` /
     //     dynamic import into the entry, so heavyweight lazy-only deps

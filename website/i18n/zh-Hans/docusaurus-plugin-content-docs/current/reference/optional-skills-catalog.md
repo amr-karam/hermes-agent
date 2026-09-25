@@ -32,6 +32,7 @@ hermes skills uninstall <skill-name>
 | 技能 | 描述 |
 |-------|-------------|
 | [**blackbox**](/user-guide/skills/optional/autonomous-ai-agents/autonomous-ai-agents-blackbox) | 将编码任务委托给 Blackbox AI CLI agent。内置评判机制的多模型 agent，通过多个 LLM 运行任务并选出最佳结果。需要 blackbox CLI 和 Blackbox AI API 密钥。 |
+| [**edge-dynamic-persona**](/user-guide/skills/optional/autonomous-ai-agents/autonomous-ai-agents-edge-dynamic-persona) | Google AI Edge Gallery 动态人格系统 (discussion #913)。实现 `run_js` actions：`persona_bootstrap`、`trait_read/write/delete`、`data_write/read/delete`、`hook_list/register`、`execute_action`。包含 MCP 服务器、CLI 和持久化 JSON 存储。 |
 | [**honcho**](/user-guide/skills/optional/autonomous-ai-agents/autonomous-ai-agents-honcho) | 配置并使用 Honcho 记忆与 Hermes — 跨会话用户建模、多配置文件对等隔离、观测配置、辩证推理、会话摘要及上下文预算执行。适用于配置 Honcho、故障排查等场景。 |
 
 ## blockchain
@@ -130,10 +131,13 @@ hermes skills uninstall <skill-name>
 | [**clip**](/user-guide/skills/optional/mlops/mlops-clip) | OpenAI 连接视觉与语言的模型。支持零样本图像分类、图文匹配及跨模态检索。在 4 亿图文对上训练。适用于图像搜索、内容审核或视觉语言任务。 |
 | [**faiss**](/user-guide/skills/optional/mlops/mlops-faiss) | Facebook 用于高效相似性搜索和稠密向量聚类的库。支持数十亿向量、GPU 加速及多种索引类型（Flat、IVF、HNSW）。适用于快速 k-NN 搜索、大规模向量检索等场景。 |
 | [**optimizing-attention-flash**](/user-guide/skills/optional/mlops/mlops-flash-attention) | 使用 Flash Attention 优化 transformer 注意力机制，实现 2-4 倍加速和 10-20 倍显存降低。适用于训练/运行长序列（>512 token）transformer、遇到注意力 GPU 显存问题或需要更快推理的场景。 |
+| [**hindsight**](/user-guide/skills/optional/mlops/mlops-hindsight) | 会学习的 Agent 记忆：嵌入式 PostgreSQL、语义回忆、事实提取。 |
 | [**guidance**](/user-guide/skills/optional/mlops/mlops-guidance) | 使用 Guidance（微软研究院的约束生成框架）通过正则表达式和语法控制 LLM 输出，保证生成有效的 JSON/XML/代码，强制结构化格式，并构建多步骤工作流。 |
 | [**huggingface-tokenizers**](/user-guide/skills/optional/mlops/mlops-huggingface-tokenizers) | 为研究和生产优化的快速 tokenizer（分词器）。基于 Rust 实现，可在 20 秒内对 1GB 文本完成分词。支持 BPE、WordPiece 和 Unigram 算法。训练自定义词表、追踪对齐、处理填充/截断，与 HuggingFace 生态集成。 |
 | [**instructor**](/user-guide/skills/optional/mlops/mlops-instructor) | 使用 Instructor（久经考验的结构化输出库）从 LLM 响应中提取带 Pydantic 验证的结构化数据，自动重试失败的提取，以类型安全方式解析复杂 JSON，并流式传输部分结果。 |
 | [**lambda-labs-gpu-cloud**](/user-guide/skills/optional/mlops/mlops-lambda-labs) | 用于 ML 训练和推理的按需及预留 GPU 云实例。适用于需要通过简单 SSH 访问专用 GPU 实例、持久化文件系统或用于大规模训练的高性能多节点集群的场景。 |
+| [**langchain**](/user-guide/skills/optional/mlops/mlops-langchain) | 用于构建 LLM 应用的 LangChain 框架。提供模块化组件、链、agent 及集成，用于构建具备上下文感知推理能力的应用。 |
+| [**langgraph**](/user-guide/skills/optional/mlops/mlops-langgraph) | 基于 LangChain 的有状态多 agent 工作流。支持循环图、状态持久化、人工介入审批及时间旅行调试。 |
 | [**llava**](/user-guide/skills/optional/mlops/mlops-llava) | 大型语言与视觉助手。支持视觉指令微调和基于图像的对话。结合 CLIP 视觉编码器与 Vicuna/LLaMA 语言模型。支持多轮图像对话、视觉问答及指令跟随。 |
 | [**modal-serverless-gpu**](/user-guide/skills/optional/mlops/mlops-modal) | 用于运行 ML 工作负载的 serverless GPU 云平台。适用于无需基础设施管理的按需 GPU 访问、将 ML 模型部署为 API 或运行自动扩缩容批处理任务的场景。 |
 | [**nemo-curator**](/user-guide/skills/optional/mlops/mlops-nemo-curator) | 面向 LLM 训练的 GPU 加速数据整理工具。支持文本/图像/视频/音频。具备模糊去重（快 16 倍）、质量过滤（30+ 启发式规则）、语义去重、PII 脱敏、NSFW 检测等功能，可跨 GPU 扩展。 |

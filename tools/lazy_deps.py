@@ -53,13 +53,19 @@ LAZY_DEPS: dict[str, tuple[str, ...]] = {
 
     # ─── Monitoring ─────────────────────────────────────────────────────────
     # OTLP export; tracks the `otlp` extra.
-    "export.otlp": (
+"export.otlp": (
         "opentelemetry-sdk==1.39.1",
         "opentelemetry-exporter-otlp-proto-http==1.39.1",
     ),
 
-    # ─── TTS providers ─────────────────────────────────────────────────────
-    # mistralai: 2.4.6 was a malicious quarantined release — never pin below 2.4.7.
+    # Frameworks
+    # LangChain: framework for building LLM applications.
+    "framework.langchain": ("langchain==0.2.9",),
+    # LangGraph: stateful multi-agent workflows built on LangChain.
+    "framework.langgraph": ("langgraph==0.2.0",),
+
+    # TTS providers
+    # mistralai: 2.4.6 was a malicious quarantined release - never pin below 2.4.7.
     # Voxtral STT + TTS share the SDK.
     "tts.mistral": ("mistralai==2.4.8",),
     "tts.edge": ("edge-tts==7.2.7",),
@@ -114,8 +120,10 @@ LAZY_DEPS: dict[str, tuple[str, ...]] = {
     # made _is_satisfied() reject every newer compatible release, so `hermes update` kept downgrading a
     # working newer client and broke daemons whose DB it had migrated (#86992, #39424, #98407).
     "memory.mem0": ("mem0ai>=2.0.10,<3",),
+    # Hindsight: Agent memory that learns - embedded PostgreSQL + pgvector + LLM fact extraction
+    "memory.hindsight": ("hindsight-all==0.10.1",),
 
-    # ─── Messaging platforms (lazy-installable on demand) ──────────────────
+    # ─── Messaging platforms (lazy-installable on demand) ───────────────────────────────────────────
     "platform.telegram": ("python-telegram-bot[webhooks]==22.8",),
     # brotlicffi: aiohttp needs its 2-arg Decompressor for Discord CDN Brotli attachments
     # (google's 1-arg `Brotli` fails "Can not decode br"). aiohttp is only capped transitively
