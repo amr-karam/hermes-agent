@@ -80,3 +80,6 @@ __pycache__/
 # Release
 release/
 *.tgz
+
+# Integrations (managed as separate repos)
+integrations/
