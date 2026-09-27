@@ -1,0 +1,50 @@
+{
+  "name": "@hermes/frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "lint": "next lint",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "@hermes/ui": "file:../../packages/ui",
+    "@react-three/drei": "^9.110.0",
+    "@react-three/fiber": "^8.16.0",
+    "@react-three/postprocessing": "^2.16.0",
+    "baseline-browser-mapping": "^2.11.26",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.0",
+    "next": "^14.2.30",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "tailwindcss": "^3.4.0",
+    "three": "^0.167.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.4.8",
+    "@testing-library/react": "^16.0.1",
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@types/three": "^0.167.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.0",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^14.2.0",
+    "eslint-config-prettier": "^9.1.0",
+    "jsdom": "^24.1.0",
+    "postcss": "^8.4.0",
+    "prettier": "^3.0.0",
+    "prettier-plugin-packagejson": "^2.4.0",
+    "prettier-plugin-tailwindcss": "^0.5.14",
+    "typescript": "^5.9.3",
+    "vitest": "^2.0.5"
+  }
+}

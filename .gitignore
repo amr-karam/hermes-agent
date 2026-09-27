@@ -65,6 +65,17 @@ pnpm-debug.log*
 # Misc
 *.pem
 .nyc_output/
+.bytecode-fingerprint
+
+# Gortex
+.gortex.yaml
+.gortex.yaml.speculative-*.bak
+
+# Python
+__pycache__/
+*.pyc
+.pytest-cache/
+*.egg-info/
 
 # Release
 release/
