@@ -1,7 +1,7 @@
 plugins {
-    alias = libs.plugins.android.library
-    alias = libs.plugins.kotlin.android
-    alias = libs.plugins.kotlin.serialization
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -9,7 +9,11 @@ android {
     compileSdk = 34
 
     defaultConfig {
+        applicationId = "com.hermes.gateway"
         minSdk = 26
+        targetSdk = 34
+        versionCode = 1
+        versionName = "1.0"
     }
 
     compileOptions {

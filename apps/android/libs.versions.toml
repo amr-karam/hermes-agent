@@ -20,6 +20,6 @@ lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-com
 activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity" }
 
 [plugins]
-android-library = { module = "com.android.library", version = "8.2.0" }
-kotlin-android = { module = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
-kotlin-serialization = { module = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+android-application = { id = "com.android.application", version = "8.2.0" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
