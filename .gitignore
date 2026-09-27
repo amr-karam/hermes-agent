@@ -3,6 +3,17 @@ node_modules/
 .pnp
 .pnp.js
 
+# Python virtual environments
+.venv/
+venv/
+env/
+
+# Hermes runtime
+.hermes-runtime/
+
+# Optional skills (shipped but not active)
+optional-skills/
+
 # Build outputs
 dist/
 build/

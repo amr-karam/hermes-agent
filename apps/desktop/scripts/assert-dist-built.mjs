@@ -2,8 +2,8 @@
 //
 // `npm run pack` / `npm run dist*` are `npm run build && npm run builder`.
 // If the `build` step (tsc -b && vite build) fails but packaging proceeds
-// anyway — a stale checkout that fails typecheck, an interrupted vite build,
-// or npm not short-circuiting `&&` in some shells — electron-builder happily
+// anyway - a stale checkout that fails typecheck, an interrupted vite build,
+// or npm not short-circuiting `&&` in some shells - electron-builder happily
 // packages an app with an empty or missing `dist/`. The result launches but
 // blank-pages with `ERR_FILE_NOT_FOUND` for dist/index.html, with no clue why.
 //
@@ -21,12 +21,12 @@ const ROUTER_CONTEXT_ERROR = "may be used only in the context of a"
 // @tanstack/react-query carries module-level React context (QueryClientContext).
 // The entry's QueryClientProvider and every lazy chunk's useQuery must share ONE
 // runtime instance; if a build ever emits a second copy, the provider's context
-// is invisible to the other copy and useQuery throws "No QueryClient set" — the
+// is invisible to the other copy and useQuery throws "No QueryClient set" - the
 // packaged app error-boundaries on launch (#95560). Same single-instance
 // invariant as the react-router check above, same failure class.
 const QUERY_CLIENT_CONTEXT_ERROR = "No QueryClient set, use QueryClientProvider to set one"
 
-// Pure check — returns { ok: true } or { ok: false, error: "..." }.
+// Pure check - returns { ok: true } or { ok: false, error: "..." }.
 // Kept side-effect-free so it can be unit tested without spawning a process.
 export function checkDistBuilt(distDir) {
   if (!existsSync(distDir) || !statSync(distDir).isDirectory()) {
@@ -41,7 +41,7 @@ export function checkDistBuilt(distDir) {
     return { ok: false, error: `dist/index.html is empty at ${indexHtml}` }
   }
 
-  // index.html alone isn't enough — vite emits hashed JS into dist/assets.
+  // index.html alone isn't enough - vite emits hashed JS into dist/assets.
   // An index.html with no script bundle still blank-pages.
   const assetsDir = join(distDir, "assets")
   const hasAssets =
@@ -72,7 +72,7 @@ export function checkDistBuilt(distDir) {
       ok: false,
       error:
         `@tanstack/react-query context invariant found in multiple JS assets: ` +
-        `${queryClientContextAssets.join(", ")} — duplicate react-query runtimes make the ` +
+        `${queryClientContextAssets.join(", ")} - duplicate react-query runtimes make the ` +
         `QueryClientProvider's context invisible to useQuery in other chunks (` +
         `"No QueryClient set" on launch, #95560)`
     }
@@ -91,7 +91,7 @@ export function checkDistBuilt(distDir) {
 
 // Renderer chunks are emitted as ESM (`<script type="module">` in index.html).
 // A silent bundler failure can emit syntactically invalid chunks that parse fine
-// as CJS-ish text but throw on module evaluation in Electron — the app then
+// as CJS-ish text but throw on module evaluation in Electron - the app then
 // white-screens with `Uncaught SyntaxError` in the renderer console (observed
 // 2026-09: the update-produced bundle was missing a 10-byte identifier token,
 // `{$:n,}` vs `{categories:n,}`, leaving an invalid destructuring pattern).
@@ -103,6 +103,10 @@ function verifyChunksParse(assetsDir) {
   const chunks = readdirSync(assetsDir).filter(name => name.endsWith(".js"))
   for (const name of chunks) {
     const file = join(assetsDir, name)
+    // File may have been deleted by a concurrent process (Vite cleanup, etc.) - skip if missing
+    if (!existsSync(file)) {
+      continue
+    }
     const probe = spawnSync(nodeBin, ["--input-type=module", "--check"], {
       input: readFileSync(file),
       maxBuffer: 64 * 1024 * 1024,
@@ -118,7 +122,7 @@ function verifyChunksParse(assetsDir) {
       const detail = String(probe.stderr || "").trim().split("\n").slice(0, 4).join(" / ")
       return {
         ok: false,
-        error: `built chunk is not valid ES module syntax: ${name} — ${detail}. ` +
+        error: `built chunk is not valid ES module syntax: ${name} - ${detail}. ` +
           `A renderer chunk failed to parse, so packaging would ship an app that ` +
           `white-screens with "Uncaught SyntaxError" on launch. Re-run the build.`,
       }
@@ -133,7 +137,7 @@ function main() {
   const result = checkDistBuilt(distDir)
 
   if (!result.ok) {
-    console.error(`\n✗ assert-dist-built: ${result.error}`)
+    console.error(`\n? assert-dist-built: ${result.error}`)
     console.error("  The renderer bundle is missing or incomplete, so packaging")
     console.error("  would produce an app that launches to a blank page.")
     console.error("  Re-run the build and check the tsc/vite output above for the")

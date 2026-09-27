@@ -305,8 +305,9 @@ RUN uv sync --frozen --no-install-project --extra all --extra messaging --extra 
 COPY web/ web/
 COPY ui-tui/ ui-tui/
 COPY apps/shared/ apps/shared/
-RUN cd web && npm run build && \
-    cd ../ui-tui && npm run build
+COPY remove-overrides.js ./
+RUN cd ui-tui && node ../remove-overrides.js && cd ..
+RUN cd web && npm install --prefer-offline --no-audit --fetch-retries=5 && npm run build &&     cd ../ui-tui && npm install --prefer-offline --no-audit --fetch-retries=5 && npm run build
 
 # ---------- Bot Screen X socket directory ----------
 # Xvnc would create this itself (/tmp is 1777); pre-creating it keeps ownership
@@ -323,15 +324,28 @@ RUN mkdir -p /tmp/hermes-runtime && chmod 0700 /tmp/hermes-runtime
 # the final read-only permissions at copy time so we skip the separate
 # `chmod -R` pass that previously walked ~30k files across the venv +
 # node_modules + source (21s amd64 / 222s arm64 — #49113).  `a+rX,go-w`
-# gives the non-root hermes user read + traverse but no write; root retains
-# write so the build steps below don't need chmod u+w dances.
-COPY --link --chmod=a+rX,go-w . .
+RUN rm -rf ui-tui/node_modules/@hermes
+COPY agent/ agent/
+COPY integrations/ integrations/
+COPY providers/ providers/
+COPY packages/ packages/
+COPY acp_adapter/ acp_adapter/
+COPY cron/ cron/
+COPY gateway/ gateway/
+COPY hermes_platform/ hermes_platform/
+COPY tools/ tools/
+COPY tui_gateway/ tui_gateway/
+COPY hermes_cli/ hermes_cli/
+COPY utils.py ./
+COPY hermes_constants.py ./
+COPY registration_lifecycle.py ./
+COPY hermes_state_ids.py ./
+COPY *.py ./
 
-# ---------- Permissions ----------
-# Link hermes-agent itself (editable). Deps are already installed in the
-# cached layer above; `--no-deps` makes this a fast egg-link creation with no
-# resolution or downloads.
-RUN uv pip install --no-cache-dir --no-deps -e "."
+# Final COPY: chmod for non-root user access
+# gives the non-root hermes user read + traverse but no write; root retains
+# write so the build steps below dont need chmod u+w dances.
+COPY --link --chmod=a+rX,go-w . .
 
 # Wire the exec shim and install-method stamp.  Files under /opt/hermes are
 # already root-owned (COPY, uv sync, npm install all run as root) and
@@ -461,6 +475,8 @@ ENV XDG_RUNTIME_DIR=/tmp/hermes-runtime
 # the opt-out env var (HERMES_DOCKER_EXEC_AS_ROOT=1).
 COPY --chmod=0755 docker/hermes-exec-shim.sh /opt/hermes/bin/hermes
 COPY --chmod=0755 docker/entrypoint-dispatch.sh /opt/hermes/docker/entrypoint-dispatch.sh
+COPY --chmod=0755 docker/main-wrapper.sh /opt/hermes/docker/main-wrapper.sh
+COPY --chmod=0755 docker/stage2-hook.sh /opt/hermes/docker/stage2-hook.sh
 
 # Pre-s6 entrypoint.sh did `source .venv/bin/activate` which exported
 # the venv bin onto PATH; Architecture B's main-wrapper.sh does the
@@ -473,6 +489,8 @@ COPY --chmod=0755 docker/entrypoint-dispatch.sh /opt/hermes/docker/entrypoint-di
 # shim wins PATH resolution. The shim's last act is to exec the venv
 # binary by absolute path, so this PATH ordering is transparent to
 # every other consumer.
+RUN uv pip install --no-cache-dir --no-deps -e "."
+ENV PYTHONPATH="/opt/hermes"
 ENV PATH="/opt/hermes/bin:/opt/hermes/.venv/bin:/opt/data/.local/bin:${PATH}"
 RUN mkdir -p /opt/data
 VOLUME [ "/opt/data" ]
