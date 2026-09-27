@@ -1,6 +1,6 @@
 {
   "name": "hermes-agent",
-  "version": "0.17.6",
+  "version": "2026.9.14",
   "private": true,
   "workspaces": [
     "apps/desktop",
@@ -20,10 +20,17 @@
     "prepare": "husky install"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.11.0",
+    "eslint-plugin-perfectionist": "^5.11.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-unused-imports": "^4.4.1",
+    "globals": "^17.12.0",
     "husky": "^9.0.0",
     "lint-staged": "^15.0.0",
     "prettier": "^3.0.0",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "typescript-eslint": "^8.70.0"
   },
   "engines": {
     "node": ">=20.0.0",
