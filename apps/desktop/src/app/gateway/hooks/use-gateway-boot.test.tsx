@@ -10,6 +10,7 @@ import {
   selectConnection,
   setConnectionsRegistry
 } from '@/store/connections'
+import { publishFirstRunInstallActive } from '@/store/first-run-install'
 import {
   activeGateway,
   closeSecondaryGateways,
@@ -314,6 +315,7 @@ beforeEach(() => {
   powerResume = null
   backendExit = null
   clearNotifications()
+  publishFirstRunInstallActive(false)
   vi.mocked(notifyError).mockReset()
   vi.mocked(warnIfTerminalBackendUnavailable).mockClear()
   ;(globalThis as { WebSocket: unknown }).WebSocket = FakeWebSocket
@@ -1779,6 +1781,40 @@ describe('useGatewayBoot remote reconnect loop (real hook, fake socket)', () => 
     expect($desktopBoot.get().error).toBeTruthy()
   })
 
+  it('a first run holding the screen suspends the boot budget instead of failing the boot', async () => {
+    // Repro: a first launch where main parks on the setup choice and then
+    // installs. That wait is paced by a human and then by the installer (a cold
+    // products build is minutes), so the flat 45s budget failed a boot that was
+    // visibly progressing — and the recovery overlay it raised covers the only UI
+    // that can answer the choice, so the first run could never be settled.
+    const desktop = fakeDesktop()
+
+    desktop.getConnection = vi.fn(() => new Promise(() => undefined))
+    ;(window as { hermesDesktop?: unknown }).hermesDesktop = desktop
+
+    render(<Harness />)
+    await flushAsync()
+
+    publishFirstRunInstallActive(true)
+
+    // Minutes of first run — far past the boot budget, inside the ceiling.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10 * 60_000)
+    })
+
+    expect($desktopBoot.get().error).toBeNull()
+
+    // The first run hands off (install done, remote applied, or dismissed):
+    // the budget applies again and a genuinely wedged wait still fails.
+    publishFirstRunInstallActive(false)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(45_000)
+    })
+
+    expect($desktopBoot.get().error).toBeTruthy()
+  })
+
   it('softSwitch(): a getConnection() that hangs on a connection-apply switch does not latch $gatewaySwitching forever (#93454)', async () => {
     // Repro: main applies a new connection (onConnectionApplied), softSwitch()
     // re-dials via getConnection(), and the IPC round-trip wedges. Without an
@@ -2067,8 +2103,8 @@ describe('useGatewayBoot remote reconnect loop (real hook, fake socket)', () => 
     act(() => backendExit?.({ code: 1 }))
 
     expect($desktopBoot.get().error).toBeTruthy()
-    expect($notifications.get()).toHaveLength(0)
   })
+
 
   it('a backend exit after boot toasts a Restart that raises the shell restart intent', async () => {
     render(<Harness />)

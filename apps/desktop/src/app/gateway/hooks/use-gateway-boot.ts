@@ -21,7 +21,13 @@ import {
   LIVENESS_REPROBE_DELAY_MS
 } from '@/lib/gateway-liveness-policy'
 import { resolveDesktopGatewayWsUrl } from '@/lib/gateway-ws-url'
-import { BACKEND_BOOT_WAIT_TIMEOUT_MS, RECONNECT_ATTEMPT_TIMEOUT_MS, withTimeout } from '@/lib/with-timeout'
+import {
+  BACKEND_BOOT_WAIT_TIMEOUT_MS,
+  FIRST_RUN_INSTALL_BOOT_CEILING_MS,
+  RECONNECT_ATTEMPT_TIMEOUT_MS,
+  withSuspendedTimeout,
+  withTimeout
+} from '@/lib/with-timeout'
 import {
   $desktopBoot,
   applyDesktopBootProgress,
@@ -31,6 +37,7 @@ import {
   setDesktopBootStep
 } from '@/store/boot'
 import { resetBackgroundPollingGuard } from '@/store/composer-status'
+import { firstRunInstallActive } from '@/store/first-run-install'
 import {
   $gateway,
   activeGateway,
@@ -1312,10 +1319,18 @@ export function useGatewayBoot({
         // round-trip must not hang "Starting Hermes…" forever. Initial boot
         // rides out a full backend cold spawn, so it gets the shared 45s
         // backend-boot budget, not the 20s reconnect budget.
-        const conn = await withTimeout(
+        //
+        // A FIRST RUN is paced by neither: main parks on the setup choice until
+        // the user answers, then installs (a cold products build is minutes).
+        // The budget is suspended while the install surface owns the screen —
+        // otherwise the wait fails a boot that is visibly progressing, and the
+        // recovery overlay then covers the very choice that would settle it.
+        const conn = await withSuspendedTimeout(
           getWindowBackend(true),
           BACKEND_BOOT_WAIT_TIMEOUT_MS,
-          'Timed out connecting to Hermes backend'
+          'Timed out connecting to Hermes backend',
+          firstRunInstallActive,
+          FIRST_RUN_INSTALL_BOOT_CEILING_MS
         )
 
         if (cancelled) {

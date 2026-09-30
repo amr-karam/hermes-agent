@@ -18,6 +18,7 @@ import { useI18n } from '@/i18n'
 import { AlertCircle, ChevronDown, ChevronRight, Globe, iconSize, Loader2, Monitor } from '@/lib/icons'
 import { capitalize } from '@/lib/text'
 import { cn } from '@/lib/utils'
+import { publishFirstRunInstallActive } from '@/store/first-run-install'
 
 import { FirstRunRemoteForm } from './first-run-remote-form'
 
@@ -406,6 +407,21 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
 
     return false
   }, [enabled, state.active, state.error, state.setupChoice, state.unsupportedPlatform])
+
+  // This surface is the authority on whether the first run owns the screen, so
+  // it publishes that ownership for the two surfaces that must yield to it (the
+  // boot recovery overlay and the boot wait's budget). Cleared on unmount so a
+  // torn-down overlay never leaves a stale claim behind.
+  useEffect(() => {
+    publishFirstRunInstallActive(shouldShow)
+  }, [shouldShow])
+
+  useEffect(
+    () => () => {
+      publishFirstRunInstallActive(false)
+    },
+    []
+  )
 
   if (!shouldShow) {
     return null

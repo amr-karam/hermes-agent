@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { $desktopBoot } from '@/store/boot'
+import { $firstRunInstallActive } from '@/store/first-run-install'
 import { $desktopOnboarding } from '@/store/onboarding'
 
 import { BootFailureOverlay } from './boot-failure-overlay'
@@ -48,6 +49,7 @@ const remoteToken = {
 }
 
 beforeEach(() => {
+  $firstRunInstallActive.set(false)
   $desktopOnboarding.set({
     configured: true,
     flow: { status: 'idle' },
@@ -211,6 +213,24 @@ describe('BootFailureOverlay', () => {
     } finally {
       restore()
     }
+  })
+
+  it('yields to the first-run install surface instead of covering the setup choice', () => {
+    // Both surfaces paint on the same z-index rung and this one mounts later,
+    // so a boot failure raised while the first run is up would cover the only UI
+    // that can answer it — leaving the run unsettleable until restart.
+    $firstRunInstallActive.set(true)
+
+    render(<BootFailureOverlay />)
+
+    expect(screen.queryByRole('dialog', { name: /Hermes couldn't start/i })).toBeNull()
+
+    // The install hands off (or reports its own failure): the recovery surface
+    // is there for whatever comes next.
+    $firstRunInstallActive.set(false)
+
+    render(<BootFailureOverlay />)
+    expect(screen.getByRole('dialog', { name: /Hermes couldn't start/i })).toBeTruthy()
   })
 
   it('shows the Nous Cloud down recovery when the backend flags isCloudBackendDown', async () => {
