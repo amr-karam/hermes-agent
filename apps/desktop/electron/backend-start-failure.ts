@@ -81,6 +81,70 @@ export function shouldLatchRemoteReauthFailure(context: RemoteReauthFailureConte
   return context.attemptedRemote && context.isReauth
 }
 
+/**
+ * Whether an SSH dial was refused on AUTHENTICATION grounds.
+ *
+ * `ssh -o BatchMode=yes` can never prompt, so a `Permission denied
+ * (publickey,password)` here means the key is missing, passphrase-locked, or
+ * not in ssh-agent. Retrying the same dial cannot change that answer: the
+ * observable symptom is an unbounded stream of doomed `ssh` children (one
+ * observed at ~113 spawns/minute against an unreachable-in-practice VPS),
+ * each logging two lines, plus the CPU those spawns cost.
+ *
+ * This is the same class as `isHostKeyChangedBootFailure`, but it must NOT
+ * share that one's treatment. A host-key change is cleared by editing
+ * `known_hosts` inside the app's own recovery path; an auth failure can be
+ * fixed entirely OUTSIDE the app (`ssh-add ~/.ssh/id_ed25519`) with no
+ * connection-details edit to bump any fingerprint. So this is terminal for the
+ * purpose of "is another dial worth it right now", never a permanent latch.
+ */
+export function isSshAuthFailure(error: unknown): boolean {
+  if ((error as { kind?: string } | null | undefined)?.kind === 'auth-failed') {
+    return true
+  }
+
+  const message = error instanceof Error ? error.message : String(error ?? '')
+
+  return /Permission denied \(publickey|too many authentication failures|BatchMode/i.test(message)
+}
+
+export interface SshAuthCooldownRecord {
+  /** The ssh config fingerprint the refusal happened under. */
+  fingerprint: string
+  /** When the refusal was recorded. */
+  ts: number
+}
+
+/**
+ * Whether an ssh scope last refused on authentication may be dialed again.
+ *
+ * Pure so the invariant is testable without booting Electron — same reason
+ * `shouldRetrySshInventory` is a predicate rather than an inline comparison.
+ *
+ * The fingerprint clause is what makes this safe rather than merely quiet:
+ * editing the connection rotates it, so a user who fixes the key or host in
+ * the app retries immediately instead of waiting out the window. The window
+ * itself is what keeps a scope that CANNOT self-heal from burning one process
+ * spawn per poll, while still recovering on its own after an out-of-band
+ * `ssh-add` — the reason this is a cooldown and not a latch.
+ */
+export function shouldRetrySshDialAfterAuthFailure(
+  record: SshAuthCooldownRecord | null | undefined,
+  fingerprint: string,
+  nowMs: number,
+  cooldownMs: number
+): boolean {
+  if (!record) {
+    return true
+  }
+
+  if (record.fingerprint !== fingerprint) {
+    return true
+  }
+
+  return nowMs - record.ts >= cooldownMs
+}
+
 export interface RemoteBootRetryContext {
   /** True when the boot that just failed was dialing a REMOTE (or cloud/SSH) backend. */
   attemptedRemote: boolean

@@ -6,10 +6,12 @@ import { isReauthRequiredError, makeUnsignedOauthError } from './backend-health'
 import {
   isHostKeyChangedBootFailure,
   isRetryableRemoteBootFailure,
+  isSshAuthFailure,
   shouldHoldBootProgressForReauth,
   shouldLatchBackendStartFailure,
   shouldLatchHostKeyChangedFailure,
-  shouldLatchRemoteReauthFailure
+  shouldLatchRemoteReauthFailure,
+  shouldRetrySshDialAfterAuthFailure
 } from './backend-start-failure'
 
 test('latches a LOCAL backend failure so the install-retry loop is broken', () => {
@@ -172,4 +174,51 @@ test('FIX #95701: with no reauth latch every boot-progress update flows as befor
     assert.equal(shouldHoldBootProgressForReauth(latch, {}), false)
     assert.equal(shouldHoldBootProgressForReauth(latch, { error: 'Desktop boot failed: spawn ENOENT' }), false)
   }
+})
+
+test('an ssh BatchMode auth refusal reads as auth-failed, from the kind tag or the message', () => {
+  // The kind tag is the classifier's own output and is what the dial path sets;
+  // the message arms the case where the error crossed a stringifying boundary.
+  assert.equal(isSshAuthFailure(Object.assign(new Error('boom'), { kind: 'auth-failed' })), true)
+  assert.equal(
+    isSshAuthFailure(new Error('hexa@19.16.1.100: Permission denied (publickey,password).')),
+    true
+  )
+  assert.equal(isSshAuthFailure(new Error('Received disconnect too many authentication failures')), true)
+})
+
+test('a connectivity ssh failure is NOT an auth failure, so the cooldown must not engage', () => {
+  // Over-matching here would throttle hosts that are merely down or slow and
+  // turn a self-healing network blip into a minute-long dead window.
+  assert.equal(isSshAuthFailure(Object.assign(new Error('boom'), { kind: 'unreachable' })), false)
+  assert.equal(isSshAuthFailure(Object.assign(new Error('boom'), { kind: 'timed-out' })), false)
+  assert.equal(isSshAuthFailure(new Error('connect ETIMEDOUT 19.16.1.100:22')), false)
+  assert.equal(isSshAuthFailure(new Error('Could not verify the existing SSH backend')), false)
+  assert.equal(isSshAuthFailure(null), false)
+  assert.equal(isSshAuthFailure(undefined), false)
+})
+
+test('an ssh auth refusal is dialable again only after the cooldown, and never on a changed fingerprint', () => {
+  // The whole point of the fix: repeated pollers must stop spawning doomed ssh
+  // children, while the two real recovery routes stay open.
+  const record = { fingerprint: 'fp-a', ts: 1_000 }
+  const cooldown = 60_000
+
+  // Inside the window: refused, and refused WITHOUT dialing.
+  assert.equal(shouldRetrySshDialAfterAuthFailure(record, 'fp-a', 1_001, cooldown), false)
+  assert.equal(shouldRetrySshDialAfterAuthFailure(record, 'fp-a', 30_000, cooldown), false)
+  assert.equal(shouldRetrySshDialAfterAuthFailure(record, 'fp-a', 60_999, cooldown), false)
+
+  // The window closing is what lets an out-of-app `ssh-add` self-heal with no
+  // app restart and no connection edit.
+  assert.equal(shouldRetrySshDialAfterAuthFailure(record, 'fp-a', 61_000, cooldown), true)
+  assert.equal(shouldRetrySshDialAfterAuthFailure(record, 'fp-a', 500_000, cooldown), true)
+
+  // Editing the connection rotates the fingerprint and retries at once, so a
+  // user who corrects the key never sits out a dead window.
+  assert.equal(shouldRetrySshDialAfterAuthFailure(record, 'fp-b', 1_001, cooldown), true)
+
+  // Never-refused scopes are always dialable.
+  assert.equal(shouldRetrySshDialAfterAuthFailure(null, 'fp-a', 0, cooldown), true)
+  assert.equal(shouldRetrySshDialAfterAuthFailure(undefined, 'fp-a', 0, cooldown), true)
 })

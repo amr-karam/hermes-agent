@@ -81,10 +81,12 @@ import { createBackendServeSupportResolver } from './backend-serve-support'
 import {
   isHostKeyChangedBootFailure,
   isRetryableRemoteBootFailure,
+  isSshAuthFailure,
   shouldHoldBootProgressForReauth,
   shouldLatchBackendStartFailure,
   shouldLatchHostKeyChangedFailure,
-  shouldLatchRemoteReauthFailure
+  shouldLatchRemoteReauthFailure,
+  shouldRetrySshDialAfterAuthFailure
 } from './backend-start-failure'
 import { describeBootstrapFailure, missingInstallPartMessage } from './bootstrap-failure-copy'
 import {
@@ -10180,6 +10182,30 @@ async function buildRemoteConnection(
 
 const sshConnections = new Map<string, any>()
 
+/**
+ * How long an ssh scope stays un-dialable after an authentication refusal.
+ * `ssh -o BatchMode=yes` cannot prompt, so a repeat dial provably cannot
+ * succeed — it only costs one `ssh` process spawn per attempt. The observed
+ * live symptom was ~113 doomed spawns/minute, which also grew desktop.log
+ * without bound.
+ *
+ * Deliberately a bounded cooldown and NOT a latch (contrast
+ * `shouldLatchHostKeyChangedFailure`): the usual fix is made outside the app —
+ * `ssh-add ~/.ssh/id_ed25519` — with no connection-details edit to rotate a
+ * fingerprint. So the connection must recover on its own within a minute
+ * instead of demanding an app restart. Matches `SSH_INVENTORY_RETRY_MS`, the
+ * cadence this same subsystem already uses for a doomed remote probe.
+ */
+const SSH_AUTH_FAILURE_COOLDOWN_MS = 60_000
+
+/**
+ * Last authentication refusal per ssh scope, with the config fingerprint it
+ * happened under. Fingerprint-keyed so editing the connection (which already
+ * forces a pool teardown in `bootstrapSshConnectionInner`) releases the
+ * cooldown immediately instead of making the user wait it out.
+ */
+const sshAuthFailureAt = new Map<string, { fingerprint: string; ts: number }>()
+
 const sshIsolatedKeepalives = createSshIsolatedKeepaliveRegistry({
   log: chunk => sshRememberLog(chunk)
 })
@@ -10711,23 +10737,51 @@ async function bootstrapSshConnectionInner(profile, sshConfig, reuseToken, sourc
 
   let removeForceCleanup = () => {}
 
-  if (created) {
-    ssh = new SshConnection(
-      { host: sshConfig.host, user: sshConfig.user, port: sshConfig.port, keyPath: sshConfig.keyPath },
-      {
-        rememberLog: sshRememberLog,
-        ownershipId: sshOwnershipKey(profile),
-        scope,
-        effectiveConfigFingerprint: sshConfig.effectiveConfigFingerprint
-      }
-    )
-    removeForceCleanup = lease.onForceCleanup(() => ssh.close())
-    await ssh.open({ signal: lease.signal })
-  }
-
   let result: any
 
+  // A scope refused on authentication cannot be fixed by dialing again, and the
+  // pollers that drive this resolver ask far more often than any human fixes an
+  // ssh-agent. Spend the cooldown without spawning anything.
+  if (
+    created &&
+    !shouldRetrySshDialAfterAuthFailure(
+      sshAuthFailureAt.get(scope),
+      fingerprint,
+      Date.now(),
+      SSH_AUTH_FAILURE_COOLDOWN_MS
+    )
+  ) {
+    const refused = new Error(
+      'SSH authentication to this host was refused and cannot succeed on retry. Load the key into ssh-agent (e.g. `ssh-add ~/.ssh/id_ed25519`) or correct the connection details.'
+    ) as any
+
+    refused.sshError = 'auth-failed'
+    refused.isSshBootstrap = true
+    refused.sshAuthCooldown = true
+    throw refused
+  }
+
   try {
+    // Creation AND dial live inside the try so an authentication refusal takes
+    // the same path as a lifecycle failure below: the half-open connection is
+    // closed, and the error reaches the `sshError`/`isSshBootstrap` tagging the
+    // renderer classifies on. `ssh.open()` used to sit above this try, so
+    // exactly the failure mode that cannot self-heal escaped untagged and
+    // unclosed, then re-dialled on the next request forever.
+    if (created) {
+      ssh = new SshConnection(
+        { host: sshConfig.host, user: sshConfig.user, port: sshConfig.port, keyPath: sshConfig.keyPath },
+        {
+          rememberLog: sshRememberLog,
+          ownershipId: sshOwnershipKey(profile),
+          scope,
+          effectiveConfigFingerprint: sshConfig.effectiveConfigFingerprint
+        }
+      )
+      removeForceCleanup = lease.onForceCleanup(() => ssh.close())
+      await ssh.open({ signal: lease.signal })
+    }
+
     if (metadata.registryConnectionId) {
       managedConnectionUpdateGate.assertCanDial(metadata.registryConnectionId, metadata.managedUpdateCorrelation || '')
     }
@@ -10754,9 +10808,15 @@ async function bootstrapSshConnectionInner(profile, sshConfig, reuseToken, sourc
       signal: lease.signal
     })
   } catch (error: any) {
+    if (isSshAuthFailure(error)) {
+      sshAuthFailureAt.set(scope, { fingerprint, ts: Date.now() })
+    }
+
     if (created) {
       try {
-        await ssh.close()
+        // Construction now happens inside this try, so `ssh` is still undefined
+        // when `new SshConnection` itself rejected.
+        await ssh?.close()
       } catch {
         void 0
       }
@@ -10801,6 +10861,10 @@ async function bootstrapSshConnectionInner(profile, sshConfig, reuseToken, sourc
     publish: () => {
       persistSshConnectionToken(profile, source, result.token, metadata.registryConnectionId)
       removeForceCleanup()
+      // The host just accepted us, so any recorded refusal is stale: drop it so
+      // a later pool loss re-dials freely instead of serving a cooldown that
+      // describes a machine which now works.
+      sshAuthFailureAt.delete(scope)
       sshConnections.set(scope, {
         ssh,
         fingerprint,

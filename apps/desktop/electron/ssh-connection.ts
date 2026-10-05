@@ -423,11 +423,20 @@ function sshErrorMessage(kind, conn, stderr?) {
       )
 
     case SSH_ERROR.AUTH_FAILED:
+      // Do NOT lead with the passphrase theory. A live probe of a refused host
+      // showed the key already loaded in ssh-agent and the server still replying
+      // "Authentications that can continue: publickey,password" — it had accepted
+      // none of the four keys offered. Telling that user to `ssh-add` sends them
+      // to repeat something they already did, so name the observation first and
+      // keep ssh-add as one cause among several.
       return (
-        `SSH authentication to ${host} failed. Desktop runs ssh non-interactively ` +
-        `(BatchMode), so a key requiring a passphrase or 2FA must be loaded into your ` +
-        `ssh-agent first (e.g. \`ssh-add ~/.ssh/id_ed25519\`), or set an IdentityFile in ` +
-        `~/.ssh/config. Original error: ${String(stderr || '').trim()}`
+        `The SSH server at ${host} rejected every key Desktop offered it. Because this ` +
+        `connection is non-interactive, Desktop can only offer keys it already holds — the usual ` +
+        `causes are that the account's authorized_keys does not include the configured key, or that ` +
+        `the user/key above is not the pair you intend. Check that the matching .pub key is in ` +
+        `~/.ssh/authorized_keys for that account. If the key is passphrase-locked and not loaded, ` +
+        `run \`ssh-add\` for it or set an IdentityFile in ~/.ssh/config. ` +
+        `Original error: ${String(stderr || '').trim()}`
       )
 
     case SSH_ERROR.UNREACHABLE:
