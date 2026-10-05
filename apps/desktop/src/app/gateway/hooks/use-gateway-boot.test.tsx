@@ -10,7 +10,7 @@ import {
   selectConnection,
   setConnectionsRegistry
 } from '@/store/connections'
-import { publishFirstRunInstallActive } from '@/store/first-run-install'
+import { publishFirstRunInstallActive, publishFirstRunInstallProgress } from '@/store/first-run-install'
 import {
   activeGateway,
   closeSecondaryGateways,
@@ -1796,11 +1796,19 @@ describe('useGatewayBoot remote reconnect loop (real hook, fake socket)', () => 
     await flushAsync()
 
     publishFirstRunInstallActive(true)
+    publishFirstRunInstallProgress()
 
-    // Minutes of first run — far past the boot budget, inside the ceiling.
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(10 * 60_000)
-    })
+    // A long-but-alive first run: the measured 2026-10-04 launch spent 14 min in
+    // `git fetch` + a 259-commit checkout, 3.5 min in uv, then a 12 min monorepo
+    // npm install and was still building products at 32 min. The installer keeps
+    // reporting throughout, so elapsed time must never fail this boot.
+    for (let tick = 0; tick < 40; tick += 1) {
+      publishFirstRunInstallProgress()
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000)
+      })
+    }
 
     expect($desktopBoot.get().error).toBeNull()
 
@@ -1810,6 +1818,37 @@ describe('useGatewayBoot remote reconnect loop (real hook, fake socket)', () => 
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(45_000)
+    })
+
+    expect($desktopBoot.get().error).toBeTruthy()
+  })
+
+  it('a first run that goes silent past the stall ceiling still fails into recovery', async () => {
+    // The counterpart to the contract above: bounding elapsed time is wrong, but
+    // the wait must still end somewhere. A first run that stops reporting — no
+    // installer output, no stage transition — is the wedge, and the recovery
+    // overlay is the honest place for it to land.
+    const desktop = fakeDesktop()
+
+    desktop.getConnection = vi.fn(() => new Promise(() => undefined))
+    ;(window as { hermesDesktop?: unknown }).hermesDesktop = desktop
+
+    render(<Harness />)
+    await flushAsync()
+
+    publishFirstRunInstallActive(true)
+    publishFirstRunInstallProgress()
+
+    // Under the stall ceiling: still fine.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(9 * 60_000)
+    })
+
+    expect($desktopBoot.get().error).toBeNull()
+
+    // Past it, with nothing published in between.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2 * 60_000)
     })
 
     expect($desktopBoot.get().error).toBeTruthy()

@@ -18,7 +18,11 @@ import { useI18n } from '@/i18n'
 import { AlertCircle, ChevronDown, ChevronRight, Globe, iconSize, Loader2, Monitor } from '@/lib/icons'
 import { capitalize } from '@/lib/text'
 import { cn } from '@/lib/utils'
-import { publishFirstRunInstallActive } from '@/store/first-run-install'
+import {
+  publishFirstRunInstallActive,
+  publishFirstRunInstallAwaitingUser,
+  publishFirstRunInstallProgress
+} from '@/store/first-run-install'
 
 import { FirstRunRemoteForm } from './first-run-remote-form'
 
@@ -330,6 +334,10 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
       .getBootstrapState()
       .then(snapshot => {
         if (!cancelled && snapshot) {
+          // The snapshot is itself a sign of life: it proves how far this run
+          // already got, so a mount that lands mid-install does not present as
+          // a stall to the boot wait.
+          publishFirstRunInstallProgress()
           setState(snapshot)
         }
       })
@@ -338,7 +346,10 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
         // stays empty, app falls through to existing onboarding flow.
       })
 
-    const off = desktop.onBootstrapEvent(ev => setState(prev => applyEvent(prev, ev)))
+    const off = desktop.onBootstrapEvent(ev => {
+      publishFirstRunInstallProgress()
+      setState(prev => applyEvent(prev, ev))
+    })
 
     return () => {
       cancelled = true
@@ -381,6 +392,16 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
   const localStarting = forActiveRoot && localStart.starting
   const localStartError = forActiveRoot ? localStart.error : null
 
+  const stages = state.manifest?.stages || []
+  const currentStage = stages.find(s => state.stages[s.name]?.state === 'running')?.name
+
+  // The manifest already distinguishes work from people: `setup` and `gateway`
+  // need a human, and the setup choice is the same thing one stage earlier. Time
+  // spent in either is the user's, so the boot wait must not read it as an
+  // installer that has gone silent.
+  const awaitingUser =
+    Boolean(state.setupChoice) || Boolean(stages.find(s => s.name === currentStage)?.needs_user_input)
+
   // Mount logic: show whenever a bootstrap is in flight, completed-with-error,
   // or actively running with a manifest. Hide entirely after a successful
   // completion so the rest of the UI can take over.
@@ -415,6 +436,10 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
   useEffect(() => {
     publishFirstRunInstallActive(shouldShow)
   }, [shouldShow])
+
+  useEffect(() => {
+    publishFirstRunInstallAwaitingUser(shouldShow && awaitingUser)
+  }, [shouldShow, awaitingUser])
 
   useEffect(
     () => () => {
@@ -563,9 +588,6 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
       </div>
     )
   }
-
-  const stages = state.manifest?.stages || []
-  const currentStage = stages.find(s => state.stages[s.name]?.state === 'running')?.name
 
   const completedCount = stages.filter(
     s => state.stages[s.name]?.state === 'succeeded' || state.stages[s.name]?.state === 'skipped'

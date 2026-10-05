@@ -23,7 +23,7 @@ import {
 import { resolveDesktopGatewayWsUrl } from '@/lib/gateway-ws-url'
 import {
   BACKEND_BOOT_WAIT_TIMEOUT_MS,
-  FIRST_RUN_INSTALL_BOOT_CEILING_MS,
+  FIRST_RUN_INSTALL_STALL_CEILING_MS,
   RECONNECT_ATTEMPT_TIMEOUT_MS,
   withSuspendedTimeout,
   withTimeout
@@ -37,7 +37,7 @@ import {
   setDesktopBootStep
 } from '@/store/boot'
 import { resetBackgroundPollingGuard } from '@/store/composer-status'
-import { firstRunInstallActive } from '@/store/first-run-install'
+import { firstRunInstallActivity } from '@/store/first-run-install'
 import {
   $gateway,
   activeGateway,
@@ -1321,16 +1321,28 @@ export function useGatewayBoot({
         // backend-boot budget, not the 20s reconnect budget.
         //
         // A FIRST RUN is paced by neither: main parks on the setup choice until
-        // the user answers, then installs (a cold products build is minutes).
-        // The budget is suspended while the install surface owns the screen —
-        // otherwise the wait fails a boot that is visibly progressing, and the
-        // recovery overlay then covers the very choice that would settle it.
+        // the user answers, then installs (a cold products build is minutes —
+        // a measured first launch ran 32 min before this wait killed it). The
+        // budget is charged only for time the install surface does NOT own, and
+        // the ceiling bounds installer SILENCE rather than elapsed time, so a
+        // long-but-alive install survives while a wedged one still ends in the
+        // recovery overlay instead of hanging "Starting Hermes…" forever.
+        // Neither can be a fixed total: the manifest's `needs_user_input`
+        // stages are paced by a person, so awaitingUser suspends the ceiling.
         const conn = await withSuspendedTimeout(
           getWindowBackend(true),
           BACKEND_BOOT_WAIT_TIMEOUT_MS,
           'Timed out connecting to Hermes backend',
-          firstRunInstallActive,
-          FIRST_RUN_INSTALL_BOOT_CEILING_MS
+          () => {
+            const install = firstRunInstallActivity()
+
+            return {
+              suspended: install.active,
+              awaitingUser: install.awaitingUser,
+              idleForMs: install.idleForMs
+            }
+          },
+          FIRST_RUN_INSTALL_STALL_CEILING_MS
         )
 
         if (cancelled) {

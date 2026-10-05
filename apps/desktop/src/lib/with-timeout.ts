@@ -15,12 +15,24 @@ export const BACKEND_BOOT_WAIT_TIMEOUT_MS = 45_000
 // caller forever. Every caller of these bounds them with this shared budget.
 export const RECONNECT_ATTEMPT_TIMEOUT_MS = 20_000
 
-/** Hard ceiling on a boot wait whose budget is suspended (see
- *  withSuspendedTimeout). A first-run install is paced by a human and by the
- *  installer, so the budget above cannot be the whole story — but a first run
- *  that wedges must still end in the recovery surface rather than hanging
+/** Longest the first-run install may go completely silent before the boot wait
+ *  concludes it wedged. This is a STALL ceiling, not a duration budget: a real
+ *  cold install is paced by the network, by npm/uv, and by a person answering
+ *  the manifest's `needs_user_input` stages, so any total-elapsed bound is
+ *  wrong by construction (a measured 2026-10-04 first launch ran 32 min and was
+ *  still building products). Silence is the only honest wedge signal.
+ *
+ *  Sized against the observed quiet stretches of that run: 123 s inside
+ *  `git fetch origin/main`, 87 s inside uv's dependency resolve, 56 s inside a
+ *  259-commit checkout. 10 min clears those with room to spare while still
+ *  ending a genuinely dead installer in the recovery surface instead of
  *  "Starting Hermes…" forever. */
-export const FIRST_RUN_INSTALL_BOOT_CEILING_MS = 30 * 60_000
+export const FIRST_RUN_INSTALL_STALL_CEILING_MS = 10 * 60_000
+
+/** How often a suspended wait re-reads its probe. The suspension is owned by
+ *  another surface (an overlay that mounts, re-renders, and unmounts), so a
+ *  coarse boundary would let one unlucky sample decide the whole wait. */
+const SUSPENSION_POLL_MS = 250
 
 /** Rejection raised by withTimeout. The bounded work is NOT cancelled — the
  * caller decides what a straggler that settles later means. */
@@ -73,35 +85,72 @@ export function withTimeout<T>(
   })
 }
 
+/** What a suspended wait can observe about the thing pacing it. */
+export interface SuspensionProbe {
+  /** True while something other than this wait's own clock paces it. */
+  suspended: boolean
+  /** How long that pacing has gone without a sign of life. Omit when the caller
+   *  cannot observe one — the stall ceiling then never applies and `ms` is the
+   *  only bound. */
+  idleForMs?: number
+  /** True while the pacing waits on a person rather than on work. A human
+   *  reading API-key instructions is not a stall, so no ceiling applies. */
+  awaitingUser?: boolean
+}
+
 /** Settle with `promise`, or reject with a TimeoutError after `ms` of
- *  UNSUSPENDED time. While `isSuspended()` is true the deadline is re-armed
- *  instead of firing, so work paced by something other than its own clock — a
- *  first-run install waiting on the user's setup choice, then on a multi-minute
- *  products build — is not failed by a budget that only fits a cold backend
- *  spawn. `ceilingMs` bounds the total wait so a wedged run still ends in a
- *  real recovery affordance. */
+ *  UNSUSPENDED time — plus, when the caller can see it, after
+ *  `stallCeilingMs` of silence from the pacing work.
+ *
+ *  Un-suspended time is CHARGED, not sampled at `ms` boundaries: the suspension
+ *  belongs to another surface that legitimately flickers (an overlay remount, a
+ *  snapshot that has not hydrated, a stage event that resets the state), and a
+ *  boundary sampler lets any one of those flickers fail a boot that is visibly
+ *  progressing — which is precisely what this function exists to prevent. The
+ *  flat budget only bites once the wait has genuinely not been paced for `ms`.
+ *
+ *  `stallCeilingMs` bounds silence, not duration, so a long-but-alive install
+ *  runs to completion while a wedged one still ends in a real recovery
+ *  affordance. */
 export function withSuspendedTimeout<T>(
   promise: Promise<T>,
   ms: number,
   message: string,
-  isSuspended: () => boolean,
-  ceilingMs: number
+  probe: () => SuspensionProbe,
+  stallCeilingMs: number
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const startedAt = Date.now()
+    const pollMs = Math.min(SUSPENSION_POLL_MS, Math.max(ms, 1))
+    let chargedMs = 0
+    let sampledAt = startedAt
     let timer: ReturnType<typeof setTimeout>
 
     const expire = () => {
-      if (isSuspended() && Date.now() - startedAt < ceilingMs) {
-        timer = setTimeout(expire, ms)
+      const now = Date.now()
+      const span = now - sampledAt
+
+      sampledAt = now
+
+      const { suspended, idleForMs, awaitingUser } = probe()
+
+      if (!suspended) {
+        chargedMs += span
+      }
+
+      const outOfBudget = chargedMs >= ms
+      const stalled = !awaitingUser && idleForMs !== undefined && idleForMs >= stallCeilingMs
+
+      if (outOfBudget || stalled) {
+        reject(new TimeoutError(message))
 
         return
       }
 
-      reject(new TimeoutError(message))
+      timer = setTimeout(expire, pollMs)
     }
 
-    timer = setTimeout(expire, ms)
+    timer = setTimeout(expire, pollMs)
 
     Promise.resolve(promise).then(
       value => {
