@@ -261,6 +261,7 @@ def _tool_candidates(name: str, tools: Iterable[Any], should_register: Callable[
         schema = _schema._convert_mcp_schema(name, t)
         handler = _handlers._make_tool_handler(name, t.name, tool_timeout)
         out.append(_Candidate(schema["name"], f"tool {t.name!r}", schema, handler))
+    _schema.log_clamped_name_summary(name)
     return out
 
 

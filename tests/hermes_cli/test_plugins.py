@@ -157,6 +157,7 @@ class TestPluginDiscovery:
     def test_enabled_portable_plugin_registers_components(
         self, tmp_path, monkeypatch
     ):
+        import sys
         from hermes_cli.agent_plugins import MCP_SCHEMA_V1, PLUGIN_SCHEMA_V1
         from hermes_cli import plugins as plugins_mod
 
@@ -166,12 +167,13 @@ class TestPluginDiscovery:
         skill.mkdir(parents=True)
         app = tmp_path / "example-app"
         app.write_text("", encoding="utf-8")
+        os_key = "win32" if sys.platform == "win32" else sys.platform
         (plugin / "plugin.json").write_text(
             json.dumps({
                 "$schema": PLUGIN_SCHEMA_V1,
                 "name": "portable.test",
                 "extensions": {"com.nousresearch.hermes": {"servers": {"worker": {
-                    "app": {"darwin": {"presence": "executable", "location": str(app)}},
+                    "app": {os_key: {"presence": "executable", "location": str(app)}},
                     "requires": {"app": True},
                     "liveness": {"kind": "static"},
                 }}}},
