@@ -185,6 +185,14 @@ jobs:
       - name: Forbid in-tree use of plugin-compat pointers
         run: python scripts/check_compat_pointers.py
 
+      # apps/desktop/index.html pre-paints the themed background for opaque
+      # windows only; src/main.tsx holds the same decision as TRANSPARENT_WINDOWS.
+      # A kind in one list but not the other either paints an opaque rectangle on
+      # a transparent window (the intro-cinematic flash) or leaves an opaque
+      # window at UA white. Both files comment "keep the two in step".
+      - name: Keep desktop transparent-window kinds in step
+        run: python scripts/check_transparent_windows.py
+
       # /tmp is not portable (Termux has none, native Windows has none, macOS aliases it to
       # /private/tmp, Linux mounts it as a small tmpfs). Production code resolves scratch space
       # through the scratch-dir helper; skills, docs and prompts must not teach the model a

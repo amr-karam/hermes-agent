@@ -298,10 +298,26 @@ function applyTheme(theme: DesktopTheme, mode: 'light' | 'dark', chatFontFamily 
 
   // Raw (non-JSON) keys read by the inline pre-paint script in index.html —
   // they let a brand-new window paint the themed background on its very first
-  // frame, before this module has even loaded.
+  // frame, before this module has even loaded. The global key is the legacy
+  // single-profile slot and stays authoritative for windows that carry no
+  // `?profile=`; the per-profile keys exist so a window opened for profile B
+  // does not first-flash profile A's background (boot paint below resolves
+  // BOOT_PROFILE_KEY the same way).
   try {
+    const connectionProfile = normalizeProfileKey(
+      $connection.get()?.profile ?? ($connection.get() ? $activeGatewayProfile.get() : BOOT_PROFILE_KEY)
+    )
+
     window.localStorage.setItem('hermes-boot-background', chromeBg)
     window.localStorage.setItem('hermes-boot-color-scheme', rendered)
+
+    if (connectionProfile && connectionProfile !== 'default') {
+      window.localStorage.setItem(`hermes-boot-background:${connectionProfile}`, chromeBg)
+      window.localStorage.setItem(`hermes-boot-color-scheme:${connectionProfile}`, rendered)
+    } else {
+      window.localStorage.removeItem('hermes-boot-background:default')
+      window.localStorage.removeItem('hermes-boot-color-scheme:default')
+    }
   } catch {
     // Storage may be unavailable (private mode / quota); the inline script
     // falls back to prefers-color-scheme.

@@ -406,6 +406,7 @@ def attach_self_to_kill_on_close_job() -> bool:
     if not _IS_WINDOWS or _JOB_HANDLE is not None:
         return _JOB_HANDLE is not None
     try:
+        import os
         import ctypes
         from ctypes import wintypes
 

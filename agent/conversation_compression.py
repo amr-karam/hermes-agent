@@ -2135,17 +2135,25 @@ def check_compression_model_feasibility(agent: Any) -> None:
                 aux_model, base_url=aux_base_url, api_key=aux_api_key, config_context_length=_aux_cfg_ctx,
                 provider=_aux_provider, custom_providers=agent._custom_providers,
             )
-        # Aux model must meet MINIMUM_CONTEXT_LENGTH like the main model, else it cannot summarise a full window.
-        if aux_context and aux_context < MINIMUM_CONTEXT_LENGTH:
+        # The 64K floor in MINIMUM_CONTEXT_LENGTH was written for the MAIN model
+        # (tool-calling needs a large window). The aux compression model only
+        # produces a summary, so a smaller window is fine — the threshold is
+        # already clamped to the aux model's window by _lower_threshold_to_aux_context,
+        # and _compute_threshold_tokens caps the trigger at 85% of the effective
+        # window for small models (3,400 tokens for a 4K model).
+        # A hard floor here blocked every non-64K compression model: that's the
+        # exact defect this replaces.
+        if aux_context and aux_context < 256:
             raise ValueError(
                 f"Auxiliary compression model {aux_model} has a context "
                 f"window of {aux_context:,} tokens, which is below the "
-                f"minimum {MINIMUM_CONTEXT_LENGTH:,} required by Hermes "
-                f"Agent.  Choose a compression model with at least "
-                f"{MINIMUM_CONTEXT_LENGTH // 1000}K context (set "
-                f"auxiliary.compression.model in config.yaml), or set "
-                f"auxiliary.compression.context_length to override the "
-                f"detected value if it is wrong."
+                f"minimum 256 required to produce a summary. "
+                f"Choose a larger compression model in config.yaml."
+            )
+        if aux_context and aux_context < MINIMUM_CONTEXT_LENGTH:
+            _lower_threshold_to_aux_context(
+                agent, aux_model=aux_model, aux_context=aux_context,
+                aux_provider=_aux_cfg_provider, aux_base_url=aux_base_url,
             )
         if aux_context < agent.context_compressor.threshold_tokens:
             _lower_threshold_to_aux_context(

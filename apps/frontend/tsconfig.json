@@ -12,11 +12,11 @@
     "incremental": true,
     "module": "esnext",
     "esModuleInterop": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "preserve",
-"plugins": [
+    "plugins": [
       {
         "name": "next"
       }
@@ -24,7 +24,8 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
-    }
+    },
+    "types": ["three", "node", "react", "react-dom"]
   },
   "include": [
     "next-env.d.ts",

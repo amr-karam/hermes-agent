@@ -119,7 +119,11 @@ _KNOWN_PROVIDER_KEYS = {
     "api_mode", "transport", "model", "default_model", "models", "models_discovered",
     "context_length", "rate_limit_delay", "request_timeout_seconds", "stale_timeout_seconds",
     "discover_models", "extra_body", "extra_headers", "capabilities", "ssl_ca_cert", "ssl_verify",
-    "catalog_provider", "session_affinity_header"}
+    "catalog_provider", "session_affinity_header",
+    # Operator-declared reasoning vocabulary for a custom relay whose accepted levels are not
+    # discoverable; clamped onto before the request (a route that tops out below the widest
+    # OpenAI-compat set answers 400 "`reasoning_effort` must be one of `low`, `medium`, or `high`").
+    "reasoning_efforts", "supported_reasoning_efforts"}
 
 
 def _pick_provider_base_url(entry: Dict[str, Any], provider_key: str) -> str:

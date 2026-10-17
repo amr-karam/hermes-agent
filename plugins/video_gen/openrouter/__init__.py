@@ -157,8 +157,10 @@ class OpenRouterVideoGenProvider(VideoGenProvider):
     _poll_deadline_s = 900.0
     _request_timeout_s = 60.0
 
-    def __init__(self) -> None:
-        self._catalog_cache: Optional[Tuple[List[Dict[str, Any]], float]] = None
+    # Class-level: schema building resolves a FRESH provider per call, so a per-instance
+    # cache re-hit the network (seconds, on a lazily-installed venv) on every tool-definition
+    # build. The catalog is public and slow-changing, so one process-wide entry is enough.
+    _catalog_cache: Optional[Tuple[List[Dict[str, Any]], float]] = None
 
     # ---- credentials / transport -------------------------------------------------------------
     def _credentials(self) -> Tuple[str, str]:

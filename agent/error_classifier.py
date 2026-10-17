@@ -526,6 +526,16 @@ _REASONING_REQUIRED_MARKERS = (
     "always enabled", "cannot be turned off",
 )
 
+#: Provider 400 naming the reasoning field AND enumerating the levels it accepts
+#: ("`reasoning_effort` must be one of `low`, `medium`, or `high`"). The field is understood — only
+#: the requested level is out of vocabulary, which no "unsupported" rule matched, so every aux call
+#: on such a route 400'd (the desktop's commit-message one-shot included). Recovered like #112781:
+#: drop the control and let the route apply its own default.
+#:
+#: The ENUMERATION is required, not a generic "invalid value" phrase — that would swallow unrelated
+#: bodies which merely mention the token.
+_REASONING_VOCABULARY_PHRASES = ("must be one of", "supported values are")
+
 
 def is_reasoning_required_rejection(error_msg: str) -> bool:
     """Provider 400 saying the model's reasoning cannot be switched OFF ("Reasoning is mandatory for
@@ -550,6 +560,9 @@ def is_reasoning_field_rejection(error_msg: str) -> bool:
     model, so both the main loop and the auxiliary ladder retry once without the disable. A body
     whose structured ``param``/code names the reasoning field (``'param': 'reasoning.effort'``,
     ``invalid_reasoning_effort``, #100536) is a rejection whatever the message says — even none.
+    A body enumerating the route's accepted LEVELS next to the token ("`reasoning_effort` must be one
+    of `low`, `medium`, or `high`") is the same fault class — the control is understood, the value
+    out of vocabulary — so it recovers by dropping the control and letting the route default.
 
     Known trade-off: a 400 about a thinking *state* ("Function calling is not supported when
     thinking is enabled") also matches — the marker sits right next to the token, so no proximity
@@ -562,7 +575,23 @@ def is_reasoning_field_rejection(error_msg: str) -> bool:
     if token is None:
         return False
     near = msg[max(0, token.start() - 32):token.end() + 32]
-    return "unsupported" in near or any(m in msg for m in UNSUPPORTED_PARAM_MARKERS)
+    if "unsupported" in near or any(m in msg for m in UNSUPPORTED_PARAM_MARKERS):
+        return True
+    # Vocabulary rejection: the field is named AND the body enumerates the ladder levels this
+    # route accepts. Both halves are required — the phrase alone is generic, and the enumeration
+    # alone ("supported values are: ..." on an unrelated field) is not ours.
+    near_wide = msg[max(0, token.start() - 48):token.end() + 160]
+    if not any(p in near_wide for p in _REASONING_VOCABULARY_PHRASES):
+        return False
+    from agent.reasoning_effort import EFFORT_LADDER
+
+    # Word-boundary matched: substring matching reads "max" in "maximum" and "low" in "below",
+    # arming this branch on unrelated 400s. "none" is excluded — it is the thinking-off encoding,
+    # so a body listing only "none" is a disable rejection, which the rung above owns.
+    return any(
+        re.search(rf"\b{re.escape(level)}\b", near_wide)
+        for level in EFFORT_LADDER if level != "none"
+    )
 
 
 def _billing_hints(error_msg: str) -> Verdict:

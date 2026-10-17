@@ -83,3 +83,11 @@ release/
 
 # Integrations (managed as separate repos)
 integrations/
+
+# Nested sub-projects with their own history (do NOT track in this repo)
+dev_crew/
+Trilinos/
+Trilinos-install/
+Trilinos-build/
+anima-agent-integration/
+anima-project/

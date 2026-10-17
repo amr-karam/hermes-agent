@@ -31,6 +31,9 @@ _WIN_CUDA_VERSION = "13.3"
 # arm64 Windows CUDA prebuilts landed upstream (~b1036x) on CUDA 13.4. Tags at or before b10290
 # don't have them; resolution succeeds and the download 404s honestly if a user pins backward.
 _WIN_CUDA_VERSION_ARM64 = "13.4"
+# CUDA 13 removed Maxwell/Pascal/Volta. llama.cpp still publishes a CUDA 12.4 Windows asset that
+# carries sm_61, which is what pre-Turing cards must install instead of the 13.x default.
+_WIN_CUDA_VERSION_PASCAL = "12.4"
 
 
 def default_tag() -> str:
@@ -167,7 +170,16 @@ def resolve_assets(tag: str, backend: str, os_name: str | None = None,
             extension = "zip" if os_name == "win" else "tar.gz"
             return AssetPlan(tag, backend, [
                 f"llama-{tag}-bin-{os_name}-rocm-{rocm_ver}-{arch}.{extension}"])
+    # The toolkit version follows the DEVICE, not the newest release: CUDA 13 dropped
+    # Maxwell/Pascal/Volta, so a pre-Turing card handed the 13.x asset installs cleanly,
+    # verifies, and then fails on the first inference. Falls back to the 13.x default when the
+    # capability can't be read, so a probe miss never silently downgrades a modern card.
     cuda_ver = _WIN_CUDA_VERSION_ARM64 if arch == "arm64" else _WIN_CUDA_VERSION
+    if os_name == "win" and backend == "cuda" and arch != "arm64":
+        with suppress(Exception):
+            from hermes_cli.local_runtime.hardware import cuda_version_for_device
+
+            cuda_ver = cuda_version_for_device(cuda_ver)
     return AssetPlan(tag, backend, [t.format(tag=tag, arch=arch, cuda_ver=cuda_ver)
                                     for t in templates[backend]])
 

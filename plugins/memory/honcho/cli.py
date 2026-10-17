@@ -628,8 +628,13 @@ def _setup_local_auth(cfg: dict, hermes_host: dict) -> None:
     the server's AUTH_JWT_SECRET as the bearer token. It is stored under the host block (not
     top-level apiKey) so ``get_honcho_client`` treats it as an explicit local auth opt-in and
     cloud/hybrid switching is unaffected."""
+    had_base_url = "baseUrl" in cfg
     if new_url := _prompt("Base URL", default=cfg.get("baseUrl") or "http://localhost:8000"):
         cfg["baseUrl"] = new_url
+    if not had_base_url:
+        # Switching from cloud to local: a cloud API key / OAuth grant is invalid against localhost
+        hermes_host.pop("apiKey", None)
+        hermes_host.pop("oauth", None)
     current_host_key = hermes_host.get("apiKey", "")
     print("\n  Local Honcho auth (JWT signed with the server's AUTH_JWT_SECRET).\n"
           f"  Leave blank if your server runs with AUTH_USE_AUTH=false. Current: {_mask(current_host_key)}")
@@ -702,7 +707,10 @@ def _setup_browser_login(cfg: dict, hermes_host: dict, write_path: Path) -> bool
 
 def _setup_cloud_auth(cfg: dict, hermes_host: dict, write_path: Path) -> bool:
     """Cloud auth: OAuth (browser), device code, or API key. Returns False on abort."""
+    had_base_url = "baseUrl" in cfg
     cfg.pop("baseUrl", None)  # cloud uses SDK default
+    if had_base_url:
+        hermes_host.pop("apiKey", None)  # a local JWT is invalid against the cloud API
     from plugins.memory.honcho.oauth import OAuthCredential, is_oauth_access_token
     existing_oauth = OAuthCredential.from_host_block(hermes_host)
     device_available = _device_login_available()

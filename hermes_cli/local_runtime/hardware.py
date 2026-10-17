@@ -194,6 +194,58 @@ def _nvidia_smi_path() -> str | None:
     return found
 
 
+# CUDA 13 (13.0+) removed Maxwell, Pascal and Volta from its supported architectures — a build
+# against it cannot generate or run sm_50..sm_70 code. llama.cpp keeps shipping a CUDA 12.4
+# asset alongside its 13.x ones precisely so those cards stay usable, so the binary we install
+# has to follow the DEVICE's capability, not the newest toolkit. sm_75 (Turing) is the first
+# architecture CUDA 13 still builds for.
+_CUDA_DROPPED_MAX_SM = 70
+
+
+def nvidia_compute_capability() -> "tuple[int, int] | None":
+    """(major, minor) compute capability of the first NVIDIA device, or None when unknown.
+
+    Read from nvidia-smi's compute_cap query — no toolkit and no CUDA context needed, so it
+    works on a driver with no CUDA installed at all. None means "don't guess": the caller
+    keeps the configured toolkit version rather than downgrading an unknown card.
+    """
+    exe = _nvidia_smi_path()
+    if exe is None:
+        return None
+    with suppress(OSError, ValueError, IndexError, subprocess.TimeoutExpired):
+        out = subprocess.run(
+            [exe, "--query-gpu=compute_cap", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=10)
+        if out.returncode != 0 or not out.stdout.strip():
+            return None
+        major, minor = (int(x) for x in out.stdout.strip().splitlines()[0].split(".")[:2])
+        return major, minor
+    return None
+
+
+def cuda_version_for_device(default: str) -> str:
+    """Pick the CUDA asset version a device can actually run.
+
+    Pre-Turing cards (Maxwell/Pascal/Volta) get the 12.4 asset; everything at or above
+    sm_75, and any card we cannot identify, keeps ``default``. Returning ``default`` on a
+    failed probe is deliberate: a downgrade must never be triggered by a detection miss,
+    since 12.4 predates Blackwell support and would break a card that 13.3 serves fine.
+    """
+    cap = nvidia_compute_capability()
+    if cap is None:
+        return default
+    sm = cap[0] * 10 + cap[1]
+    if sm <= _CUDA_DROPPED_MAX_SM:
+        # Imported here, not at module scope: binaries imports nothing from hardware at
+        # import time, but keeping the dependency one-way and lazy costs nothing.
+        from hermes_cli.local_runtime.binaries import _WIN_CUDA_VERSION_PASCAL
+
+        logger.debug("compute capability %d.%d predates CUDA 13; using CUDA 12.4 assets",
+                     cap[0], cap[1])
+        return _WIN_CUDA_VERSION_PASCAL
+    return default
+
+
 def _nvidia_vram() -> tuple[int, int] | None:
     """(total, free) MiB->bytes from nvidia-smi, or None."""
     exe = _nvidia_smi_path()
