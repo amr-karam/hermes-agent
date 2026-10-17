@@ -1,0 +1,72 @@
+{
+  "portfolio": {
+    "name": "Professional Design Portfolio",
+    "version": "1.0.0"
+  },
+  "colors": {
+    "primary": {
+      "900": "#0f172a",
+      "600": "#475569",
+      "500": "#64748b"
+    },
+    "accent": {
+      "500": "#64748b"
+    },
+    "semantic": {
+      "background": {
+        "primary": "#ffffff",
+        "dark": "#0f172a"
+      },
+      "text": {
+        "primary": "#0f172a",
+        "inverse": "#f8fafc"
+      }
+    }
+  },
+  "spacing": {
+    "scale": [
+      0,
+      4,
+      8,
+      16,
+      24,
+      32,
+      48,
+      64,
+      96
+    ],
+    "tokens": {
+      "none": "0",
+      "xs": "0.25rem",
+      "sm": "0.5rem",
+      "md": "0.75rem",
+      "lg": "1rem",
+      "xl": "1.5rem",
+      "2xl": "2rem",
+      "3xl": "3rem"
+    }
+  },
+  "typography": {
+    "families": {
+      "heading": "'Inter', sans-serif",
+      "body": "Inter, sans-serif"
+    }
+  },
+  "breakpoints": {
+    "sm": "640px",
+    "md": "768px",
+    "lg": "1024px",
+    "xl": "1280px"
+  },
+  "motion": {
+    "durations": {
+      "fast": "100ms",
+      "moderate": "250ms",
+      "slow": "400ms"
+    },
+    "easing": {
+      "easeInOut": "cubic-bezier(0.4, 0, 0.2, 1)",
+      "easeOut": "cubic-bezier(0, 0, 0.2, 1)"
+    }
+  }
+}

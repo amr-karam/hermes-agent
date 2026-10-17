@@ -7,11 +7,17 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        primary: 'bg-[var(--ui-color-brand)] text-[var(--ui-color-fg-inverse)] hover:bg-[var(--ui-color-brand-hover)] active:bg-[var(--ui-color-brand)]/90',
+        // Tailwind 3 cannot apply an opacity modifier to an arbitrary value that
+        // wraps a CSS variable — `bg-[var(--x)]/90` is silently dropped and
+        // emits no rule at all (verified against tailwindcss 3.4.19). Spacing
+        // inside the arbitrary value is written with underscores. `color-mix`
+        // is emitted by both Tailwind 3 and 4, so this stays valid for the
+        // v4 consumers (web/) that do support the shorthand.
+        primary: 'bg-[var(--ui-color-brand)] text-[var(--ui-color-fg-inverse)] hover:bg-[var(--ui-color-brand-hover)] active:bg-[color:color-mix(in_srgb,var(--ui-color-brand)_90%,transparent)]',
         secondary: 'bg-[var(--ui-color-bg-tertiary)] text-[var(--ui-color-fg-primary)] border border-[var(--ui-color-border)] hover:bg-[var(--ui-color-bg-hover)] hover:border-[var(--ui-color-border-strong)] active:bg-[var(--ui-color-bg-active)]',
         outline: 'bg-transparent text-[var(--ui-color-fg-primary)] border border-[var(--ui-color-border)] hover:bg-[var(--ui-color-bg-secondary)] hover:border-[var(--ui-color-border-strong)] active:bg-[var(--ui-color-bg-tertiary)]',
         ghost: 'bg-transparent text-[var(--ui-color-fg-secondary)] hover:bg-[var(--ui-color-bg-secondary)] hover:text-[var(--ui-color-fg-primary)] active:bg-[var(--ui-color-bg-tertiary)]',
-        danger: 'bg-[var(--ui-color-error)] text-[var(--ui-color-fg-inverse)] hover:bg-[var(--ui-color-error)]/90 active:bg-[var(--ui-color-error)]',
+        danger: 'bg-[var(--ui-color-error)] text-[var(--ui-color-fg-inverse)] hover:bg-[color:color-mix(in_srgb,var(--ui-color-error)_90%,transparent)] active:bg-[var(--ui-color-error)]',
       },
       size: {
         sm: 'px-3 py-1.5 text-[var(--ui-text-sm)] h-8',

@@ -58,14 +58,16 @@ const Dropdown = ({ trigger, items, onSelect, align = 'start', offset = 4 }: Dro
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [open]);
 
-  const handleTriggerClick = (e: React.MouseEvent) => {
+  const handleTriggerClick: React.MouseEventHandler<HTMLElement> = (e) => {
     e.stopPropagation();
-    const originalOnClick = (trigger.props as { onClick?: (event: React.MouseEvent) => void }).onClick;
-    originalOnClick?.(e);
+    const onClick = (trigger.props as React.HTMLAttributes<HTMLElement>).onClick as
+      | React.MouseEventHandler<HTMLElement>
+      | undefined;
+    onClick?.(e);
     setOpen((prev) => !prev);
   };
 
-  const clonedTrigger = React.cloneElement(trigger as React.ReactElement<any>, {
+  const clonedTrigger = React.cloneElement(trigger, {
     onClick: handleTriggerClick,
     'aria-haspopup': 'menu' as const,
     'aria-expanded': open,
