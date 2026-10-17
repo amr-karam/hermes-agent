@@ -91,3 +91,7 @@ Trilinos-install/
 Trilinos-build/
 anima-agent-integration/
 anima-project/milvus-repo/
+
+# Embedded external projects (not part of Hermes)
+anima-project/
+milvus-repo/
