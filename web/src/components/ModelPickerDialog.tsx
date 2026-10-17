@@ -7,7 +7,7 @@ import { Label } from "@nous-research/ui/ui/components/label";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import type { GatewayClient } from "@/lib/gatewayClient";
 import type { ModelOptionProvider, ModelOptionsResult } from "@hermes/shared";
-import { Check, RefreshCw, Search, X } from "lucide-react";
+import { IconCheck as Check, IconRefresh as RefreshCw, IconSearch as Search, IconX as X, IconWifi as Wifi, IconWifiOff as WifiOff } from "@tabler/icons-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router";
@@ -15,6 +15,7 @@ import { cn, themedBody } from "@/lib/utils";
 import { queryMatchesProviderOnly } from "@/lib/model-picker-filter";
 import { fuzzyRank, modelSearchText } from "@hermes/shared";
 import { errorMessage } from "@/lib/api-error";
+import { api, type ProviderHealthRow } from "@/lib/api";
 
 /**
  * Two-stage model picker modal.
@@ -103,6 +104,7 @@ export function ModelPickerDialog(props: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [pendingConfirm, setPendingConfirm] =
     useState<PendingExpensiveConfirm | null>(null);
+  const [providerHealth, setProviderHealth] = useState<Record<string, ProviderHealthRow["tone"]>>({});
   const closedRef = useRef(false);
 
   const applyOptions = (r: ModelOptionsResult) => {
@@ -156,6 +158,20 @@ export function ModelPickerDialog(props: Props) {
   // Load providers + models on open.
   useEffect(() => {
     closedRef.current = false;
+
+    // Fetch provider health in parallel
+    api
+      .getProviderHealth()
+      .then((health) => {
+        if (!closedRef.current) {
+          setProviderHealth(
+            Object.fromEntries(health.providers.map((row) => [row.slug, row.tone])),
+          );
+        }
+      })
+      .catch(() => {
+        // Health is best-effort; ignore failures
+      });
 
     requestOptions()
       .then((r) => {
@@ -394,6 +410,7 @@ export function ModelPickerDialog(props: Props) {
               setSelectedSlug(slug);
               setSelectedModel("");
             }}
+            providerHealth={providerHealth}
           />
 
           <ModelColumn
@@ -496,6 +513,7 @@ function ProviderColumn({
   query,
   onSelect,
   onClose,
+  providerHealth,
 }: {
   loading: boolean;
   error: string | null;
@@ -506,6 +524,7 @@ function ProviderColumn({
   onSelect(slug: string): void;
   /** The links below navigate away; the full-screen dialog must close or it keeps covering the target page. */
   onClose(): void;
+  providerHealth: Record<string, ProviderHealthRow["tone"]>;
 }) {
   return (
     <div className="border-r border-border overflow-y-auto">
@@ -539,6 +558,7 @@ function ProviderColumn({
 
       {providers.map((p) => {
         const active = p.slug === selectedSlug;
+        const health = providerHealth[p.slug];
         return (
           <ListItem
             key={p.slug}
@@ -552,6 +572,19 @@ function ProviderColumn({
               <div className="flex items-center gap-1.5">
                 <span className="font-medium truncate">{p.name}</span>
                 {p.is_current && <CurrentTag />}
+                {health && (
+                  <span
+                    className={`flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded ${health === "green" ? "text-green-400 bg-green-500/10" : health === "yellow" ? "text-yellow-400 bg-yellow-500/10" : "text-red-400 bg-red-500/10"}`}
+                    title={`Provider health: ${health}`}
+                  >
+                    {health === "red" ? (
+                      <WifiOff className="h-2.5 w-2.5" />
+                    ) : (
+                      <Wifi className="h-2.5 w-2.5" />
+                    )}
+                    <span className="uppercase">{health}</span>
+                  </span>
+                )}
               </div>
               <div className="text-xs text-text-secondary font-mono truncate">
                 {p.slug} · {p.total_models ?? p.models?.length ?? 0} models

@@ -38,6 +38,7 @@ export interface Translations {
     set: string;
     replace: string;
     clear: string;
+    clearAll: string;
     live: string;
     off: string;
     enabled: string;
@@ -216,6 +217,16 @@ export interface Translations {
     workspaceCustom: string;
     previousPage: string;
     nextPage: string;
+    filters: string;
+    sourceAll: string;
+    after: string;
+    before: string;
+    dateAfter: string;
+    dateBefore: string;
+    minMessages: string;
+    minMessagesAny: string;
+    showingOf: (shown: number, total: number) => string;
+    previewTitle: string;
     roles: {
       user: string;
       assistant: string;

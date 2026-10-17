@@ -374,6 +374,7 @@ export interface SessionQueryOptions {
   source?: string | null;
   sources?: string[];
   excludeSources?: string[];
+  search?: string;
 }
 
 function normalizeSessionQueryOptions(
@@ -399,6 +400,7 @@ function appendSessionFilters(url: string, options: SessionQueryOptions): string
   if (options.excludeSources && options.excludeSources.length > 0) {
     next = appendQueryParam(next, "exclude_sources", options.excludeSources.join(","));
   }
+  next = appendQueryParam(next, "search", options.search);
   return appendProfileParam(next, options.profile);
 }
 
@@ -1432,6 +1434,36 @@ export const api = {
     fetchJSON<SkillHubScan>(
       `/api/skills/hub/scan?identifier=${encodeURIComponent(identifier)}`,
     ),
+  /**
+   * Slash commands the embedded TUI accepts, with descriptions. Discovery
+   * only — the palette writes the selected command back into the PTY via the
+   * existing stdin path, never through a second RPC.
+   */
+  getCommands: (profile?: string) =>
+    fetchJSON<CommandsResponse>(appendProfileParam("/api/commands", profile)),
+  /**
+   * Per-provider reachability snapshot for the model picker's health badges.
+   * Read-only and cache-friendly: ``checked_at`` lets callers dedupe.
+   */
+  getProviderHealth: (profile?: string) =>
+    fetchJSON<ProviderHealthResponse>(
+      appendProfileParam("/api/model/health", profile),
+    ),
+  /**
+   * Last-N-message preview for a session row hover. Bounded (≤20) so a fast
+   * hover over a long conversation cannot drag a huge transcript off disk.
+   */
+  getSessionPreview: (id: string, limit = 5, profile = getManagementProfile()) =>
+    fetchJSON<SessionPreviewResponse>(
+      appendQueryParam(
+        appendProfileParam(
+          `/api/sessions/${encodeURIComponent(id)}/preview`,
+          profile,
+        ),
+        "limit",
+        String(limit),
+      ),
+    ),
 };
 
 /** Identity payload returned by ``GET /api/auth/me`` (Phase 7).
@@ -2203,6 +2235,45 @@ export interface SessionMessage {
   tool_name?: string;
   tool_call_id?: string;
   timestamp?: number;
+}
+
+export interface SessionPreviewResponse {
+  session_id: string;
+  profile?: string;
+  messages: SessionMessage[];
+  returned: number;
+}
+
+export interface SlashCommand {
+  name: string;
+  description: string;
+  category: string;
+  aliases: string[];
+  args_hint: string;
+  subcommands: string[];
+  source: string;
+  profile_scoped: boolean;
+  cli_only: boolean;
+  gateway_only: boolean;
+}
+
+export interface CommandsResponse {
+  commands: SlashCommand[];
+  count: number;
+}
+
+export interface ProviderHealthRow {
+  slug: string;
+  name: string;
+  tone: "green" | "yellow" | "red";
+  is_current: boolean;
+  model_count: number;
+  checked_at: number;
+}
+
+export interface ProviderHealthResponse {
+  providers: ProviderHealthRow[];
+  count: number;
 }
 
 export interface SessionMessagesResponse {

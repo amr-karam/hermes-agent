@@ -8,20 +8,7 @@ import {
 } from "react";
 import { useNavigate } from "react-router";
 import { useProfileScope } from "@/contexts/useProfileScope";
-import {
-  AlignLeft,
-  Check,
-  ChevronDown,
-  Cpu,
-  MoreVertical,
-  Pencil,
-  Package,
-  Sparkles,
-  Terminal,
-  Trash2,
-  Users,
-  X,
-} from "lucide-react";
+import { IconAlignLeft as AlignLeft, IconCheck as Check, IconChevronDown as ChevronDown, IconCpu as Cpu, IconDotsVertical as MoreVertical, IconPencil as Pencil, IconPackage as Package, IconSparkles as Sparkles, IconTerminal2 as Terminal, IconTrash as Trash2, IconUsers as Users, IconX as X } from "@tabler/icons-react";
 import spinners from "unicode-animations";
 import { H2 } from "@nous-research/ui/ui/components/typography/h2";
 import { api } from "@/lib/api";

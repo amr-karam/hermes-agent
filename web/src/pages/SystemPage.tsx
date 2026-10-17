@@ -1,32 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
-import {
-  Activity,
-  Brain,
-  Check,
-  Clock,
-  Copy,
-  Cpu,
-  Database,
-  Download,
-  Globe,
-  HardDrive,
-  KeyRound,
-  Link2,
-  Play,
-  Plus,
-  Power,
-  RotateCw,
-  Server,
-  Share2,
-  ShieldCheck,
-  Sparkles,
-  Stethoscope,
-  Terminal,
-  Trash2,
-  Upload,
-  X,
-} from "lucide-react";
+import { IconActivity as Activity, IconBrain as Brain, IconCheck as Check, IconClock as Clock, IconCopy as Copy, IconCpu as Cpu, IconDatabase as Database, IconDownload as Download, IconWorld as Globe, IconDisc as HardDrive, IconKey as KeyRound, IconLink as Link2, IconPlayerPlay as Play, IconPlus as Plus, IconPower as Power, IconRotateClockwise2 as RotateCw, IconServer as Server, IconShare2 as Share2, IconShieldCheck as ShieldCheck, IconSparkles as Sparkles, IconStethoscope as Stethoscope, IconTerminal2 as Terminal, IconTrash as Trash2, IconUpload as Upload, IconX as X } from "@tabler/icons-react";
 import { Badge } from "@nous-research/ui/ui/components/badge";
 import { Button } from "@nous-research/ui/ui/components/button";
 import { Spinner } from "@nous-research/ui/ui/components/spinner";

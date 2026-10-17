@@ -25,7 +25,7 @@ import "@xterm/xterm/css/xterm.css";
 import { Button } from "@nous-research/ui/ui/components/button";
 import { Typography } from "@nous-research/ui/ui/components/typography/index";
 import { cn } from "@/lib/utils";
-import { Copy, PanelRight, RotateCcw, X } from "lucide-react";
+import { IconCopy as Copy, IconLayoutSidebarRight as PanelRight, IconRotateClockwise as RotateCcw, IconX as X } from "@tabler/icons-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router";
@@ -103,6 +103,7 @@ import { PluginSlot } from "@/plugins";
 import { useTheme } from "@/themes";
 import { useProfileScope } from "@/contexts/useProfileScope";
 import { errorMessage } from "@/lib/api-error";
+import { PtyWebSocketProvider } from "@/lib/pty-websocket-context";
 
 // Per-tab keep-alive identity (`?attach=`): lives in pty-attach-token.ts so a
 // second tab — including a Chrome "Duplicate tab" — gets its own PTY instead of
@@ -1889,14 +1890,16 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
               "border-t border-current/10",
             )}
           >
-            <div className="border-b border-current/10 px-1 py-2">
-              <ChatSidebar
-                channel={channel}
-                profile={scopedProfile}
-                onDashboardNewSessionRequest={startFreshDashboardChat}
-                onSessionTitleChange={handleSessionTitleChange}
-              />
-            </div>
+            <PtyWebSocketProvider ws={wsRef.current}>
+              <div className="border-b border-current/10 px-1 py-2">
+                <ChatSidebar
+                  channel={channel}
+                  profile={scopedProfile}
+                  onDashboardNewSessionRequest={startFreshDashboardChat}
+                  onSessionTitleChange={handleSessionTitleChange}
+                />
+              </div>
+            </PtyWebSocketProvider>
             <ChatSessionList
               activeSessionId={resumeParam}
               profile={scopedProfile}
@@ -2079,45 +2082,47 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
         </div>
 
         {!narrow && !chatPanelCollapsed && (
-          <div
-            id="chat-side-panel"
-            role="complementary"
-            aria-label={modelToolsLabel}
-            className="flex min-h-0 shrink-0 flex-col gap-3 overflow-hidden lg:h-full lg:w-60"
-          >
-            <div className="flex h-8 shrink-0 items-center justify-end pr-1">
-              <Button
-                ghost
-                size="icon"
-                onClick={toggleChatPanel}
-                aria-label="Collapse chat side panel"
-                title="Collapse side panel"
-                className="text-text-secondary hover:text-midground"
-              >
-                <X />
-              </Button>
-            </div>
-            {/* Model picker — keeps the rail thin. */}
-            <div className="shrink-0">
-              <ChatSidebar
-                channel={channel}
-                profile={scopedProfile}
-                onDashboardNewSessionRequest={startFreshDashboardChat}
-                onSessionTitleChange={handleSessionTitleChange}
-              />
-            </div>
+          <PtyWebSocketProvider ws={wsRef.current}>
+            <div
+              id="chat-side-panel"
+              role="complementary"
+              aria-label={modelToolsLabel}
+              className="flex min-h-0 shrink-0 flex-col gap-3 overflow-hidden lg:h-full lg:w-60"
+            >
+              <div className="flex h-8 shrink-0 items-center justify-end pr-1">
+                <Button
+                  ghost
+                  size="icon"
+                  onClick={toggleChatPanel}
+                  aria-label="Collapse chat side panel"
+                  title="Collapse side panel"
+                  className="text-text-secondary hover:text-midground"
+                >
+                  <X />
+                </Button>
+              </div>
+              {/* Model picker — keeps the rail thin. */}
+              <div className="shrink-0">
+                <ChatSidebar
+                  channel={channel}
+                  profile={scopedProfile}
+                  onDashboardNewSessionRequest={startFreshDashboardChat}
+                  onSessionTitleChange={handleSessionTitleChange}
+                />
+              </div>
 
-            {/* Session switcher fills the remaining height below the model box. */}
-            <div className="min-h-0 flex-1 overflow-hidden">
-              <ChatSessionList
-                activeSessionId={resumeParam}
-                profile={scopedProfile}
-                onNewChat={startFreshDashboardChat}
-                workspaceCwd={workspaceCwd}
-                onWorkspaceChange={setWorkspaceCwd}
-              />
+              {/* Session switcher fills the remaining height below the model box. */}
+              <div className="min-h-0 flex-1 overflow-hidden">
+                <ChatSessionList
+                  activeSessionId={resumeParam}
+                  profile={scopedProfile}
+                  onNewChat={startFreshDashboardChat}
+                  workspaceCwd={workspaceCwd}
+                  onWorkspaceChange={setWorkspaceCwd}
+                />
+              </div>
             </div>
-          </div>
+          </PtyWebSocketProvider>
         )}
       </div>
       <PluginSlot name="chat:bottom" />

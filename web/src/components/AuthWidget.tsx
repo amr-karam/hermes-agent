@@ -27,7 +27,7 @@ import { useEffect, useState } from "react";
 import { api, type AuthMeResponse } from "@/lib/api";
 import { ApiError } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
-import { LogOut } from "lucide-react";
+import { IconLogout as LogOut } from "@tabler/icons-react";
 
 /** Shown when /api/auth/me fails for a reason other than "not gated". */
 export const AUTH_STATUS_UNAVAILABLE_MESSAGE =

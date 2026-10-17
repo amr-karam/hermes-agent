@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useLayoutEffect, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Check } from "lucide-react";
+import { IconCheck as Check } from "@tabler/icons-react";
 import { Button } from "@nous-research/ui/ui/components/button";
 import { BottomSheet } from "@nous-research/ui/ui/components/bottom-sheet";
 import { Typography } from "@nous-research/ui/ui/components/typography/index";
@@ -34,6 +34,15 @@ export function LanguageSwitcher({ collapsed = false, dropUp = false }: Language
   const dropdownRef = useRef<HTMLDivElement>(null);
   const narrowViewport = useBelowBreakpoint(640);
   const useMobileSheet = Boolean(dropUp && narrowViewport);
+  const [dropdownRect, setDropdownRect] = useState<DOMRect | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open || useMobileSheet) {
+      setDropdownRect(null);
+      return;
+    }
+    setDropdownRect(containerRef.current?.getBoundingClientRect() ?? null);
+  }, [open, useMobileSheet]);
 
   useEffect(() => {
     if (!open) return;
@@ -104,7 +113,7 @@ export function LanguageSwitcher({ collapsed = false, dropUp = false }: Language
       )}
 
       {open && !useMobileSheet && (() => {
-        const rect = containerRef.current?.getBoundingClientRect();
+        const rect = dropdownRect;
         const dropdown = (
           <div
             ref={dropdownRef}

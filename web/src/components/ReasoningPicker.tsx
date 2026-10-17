@@ -20,7 +20,7 @@
  */
 
 import { Select, SelectOption } from "@nous-research/ui/ui/components/select";
-import { Brain } from "lucide-react";
+import { IconBrain as Brain } from "@tabler/icons-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { api } from "@/lib/api";

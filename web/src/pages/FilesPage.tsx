@@ -5,17 +5,7 @@ import {
   useState,
   type DragEvent as ReactDragEvent,
 } from "react";
-import {
-  ArrowUp,
-  Download,
-  FileIcon,
-  Folder,
-  FolderOpen,
-  FolderPlus,
-  RefreshCw,
-  Trash2,
-  Upload,
-} from "lucide-react";
+import { IconArrowUp as ArrowUp, IconDownload as Download, IconFile as FileIcon, IconFolder as Folder, IconFolderOpen as FolderOpen, IconFolderPlus as FolderPlus, IconRefresh as RefreshCw, IconTrash as Trash2, IconUpload as Upload } from "@tabler/icons-react";
 import { Badge } from "@nous-research/ui/ui/components/badge";
 import { Button } from "@nous-research/ui/ui/components/button";
 import { Card, CardContent } from "@nous-research/ui/ui/components/card";

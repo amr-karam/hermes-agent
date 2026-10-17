@@ -17,7 +17,7 @@
 import { Button } from "@nous-research/ui/ui/components/button";
 import { Input } from "@nous-research/ui/ui/components/input";
 import { Select, SelectOption } from "@nous-research/ui/ui/components/select";
-import { FolderGit2, RefreshCw } from "lucide-react";
+import { IconGitBranch as FolderGit2, IconRefresh as RefreshCw } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useI18n } from "@/i18n";

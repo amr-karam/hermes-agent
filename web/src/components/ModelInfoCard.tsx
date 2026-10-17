@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Brain, Eye, Gauge, Lightbulb, Wrench } from "lucide-react";
+import { IconBrain as Brain, IconEye as Eye, IconGauge as Gauge, IconBulb as Lightbulb, IconTool as Wrench } from "@tabler/icons-react";
 import { Spinner } from "@nous-research/ui/ui/components/spinner";
 import { api } from "@/lib/api";
 import type { ModelInfoResponse } from "@/lib/api";

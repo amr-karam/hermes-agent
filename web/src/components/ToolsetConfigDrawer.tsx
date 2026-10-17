@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, ExternalLink, Loader2, Terminal, X } from "lucide-react";
+import { IconCheck as Check, IconExternalLink as ExternalLink, IconLoader2 as Loader2, IconTerminal2 as Terminal, IconX as X } from "@tabler/icons-react";
 import { api } from "@/lib/api";
 import type {
   ToolsetConfig,

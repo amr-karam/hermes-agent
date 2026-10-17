@@ -1,5 +1,5 @@
 import { useLayoutEffect } from "react";
-import { ExternalLink } from "lucide-react";
+import { IconExternalLink as ExternalLink } from "@tabler/icons-react";
 import { useI18n } from "@/i18n";
 import { usePageHeader } from "@/contexts/usePageHeader";
 import { cn } from "@/lib/utils";
