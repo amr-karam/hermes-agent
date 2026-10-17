@@ -322,7 +322,8 @@ async def handle_ws(ws: Any, *, auth_identity: dict | None = None, subprotocol: 
         if not ready_ok:
             disconnect_reason = "ready_send_failed"
             send_failures += 1
-            _log.error("ws ready frame send failed peer=%s", peer)
+            # Client hung up right after accept; not a server error. Teardown runs in finally.
+            _log.debug("ws ready frame send failed peer=%s", peer)
             return
 
         while True:
