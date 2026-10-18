@@ -211,6 +211,94 @@ test.skipIf(process.platform === 'win32')(
   150_000
 )
 
+/**
+ * Remove a temp dir, tolerating a process that outlived its parent.
+ *
+ * On Windows the probe kills `cmd.exe` but not the `ping` grandchild it spawned,
+ * and that orphan keeps the temp dir locked as its cwd until it finishes, so the
+ * EPERM is expected fixture behaviour -- Node's `maxRetries` did not engage.
+ */
+async function removeTempDir(temp: string): Promise<void> {
+  const deadline: number = Date.now() + 15_000
+
+  for (;;) {
+    try {
+      fs.rmSync(temp, { recursive: true, force: true })
+
+      return
+    } catch {
+      if (Date.now() > deadline) {
+        return
+      }
+
+      await new Promise<void>((resolve): void => {
+        setTimeout(resolve, 250)
+      })
+    }
+  }
+}
+
+test('a launcher that outlives the probe budget is trusted, not reported as no install', async (): Promise<void> => {
+  const temp: string = fs.mkdtempSync(path.join(os.tmpdir(), 'desktop-probe-budget-'))
+  const root: string = path.join(temp, 'root')
+  const isWindows: boolean = process.platform === 'win32'
+  const launcher: string = path.join(root, '.hermes', 'bin', isWindows ? 'hermes.cmd' : 'hermes')
+
+  try {
+    fs.mkdirSync(path.join(root, 'hermes_cli'), { recursive: true })
+    fs.writeFileSync(path.join(root, 'hermes_cli', 'main.py'), '# probe fixture\n')
+    fs.mkdirSync(path.dirname(launcher), { recursive: true })
+    // Slow to answer, but healthy: a cold start, not a broken install.
+    fs.writeFileSync(
+      launcher,
+      isWindows ? '@ping -n 2 127.0.0.1 >nul\r\nexit /b 0\r\n' : '#!/bin/sh\nsleep 1\nexit 0\n',
+      isWindows ? undefined : { mode: 0o755 }
+    )
+
+    vi.stubEnv('HERMES_PROBE_TIMEOUT_MS', '300')
+    vi.resetModules()
+
+    const fresh = await import('./source-backend')
+
+    const backend: SourceBackend | null = await fresh.resolveSourceInstallationBackend(root, ['serve'], {
+      hermesHome: path.join(temp, 'home')
+    })
+
+    assert.ok(backend, 'a slow-but-working launcher must not be reported as a missing install')
+    assert.equal(backend.bootstrap, false)
+    assert.equal(backend.local, 'installed')
+  } finally {
+    await removeTempDir(temp)
+    vi.unstubAllEnvs()
+    vi.resetModules()
+  }
+}, 60_000)
+
+test('a launcher that fails outright is still reported as no usable install', async (): Promise<void> => {
+  const temp: string = fs.mkdtempSync(path.join(os.tmpdir(), 'desktop-probe-fail-'))
+  const root: string = path.join(temp, 'root')
+  const isWindows: boolean = process.platform === 'win32'
+  const launcher: string = path.join(root, '.hermes', 'bin', isWindows ? 'hermes.cmd' : 'hermes')
+
+  try {
+    fs.mkdirSync(path.join(root, 'hermes_cli'), { recursive: true })
+    fs.writeFileSync(path.join(root, 'hermes_cli', 'main.py'), '# probe fixture\n')
+    fs.mkdirSync(path.dirname(launcher), { recursive: true })
+    fs.writeFileSync(launcher, isWindows ? '@exit /b 1\r\n' : '#!/bin/sh\nexit 1\n', isWindows ? undefined : { mode: 0o755 })
+
+    const fresh = await import('./source-backend')
+
+    assert.equal(
+      await fresh.resolveSourceInstallationBackend(root, ['serve'], { hermesHome: path.join(temp, 'home') }),
+      null,
+      'a launcher that exits non-zero is genuinely unusable'
+    )
+  } finally {
+    fs.rmSync(temp, { recursive: true, force: true })
+    vi.resetModules()
+  }
+})
+
 test('Windows console selection uses only the selected interpreter directory', (): void => {
   const temp: string = fs.mkdtempSync(path.join(os.tmpdir(), 'desktop-console-policy-'))
   const root: string = path.join(temp, 'repo')

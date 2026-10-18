@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs'
 import path from 'node:path'
 
 import { buildDesktopBackendEnv } from './backend-env'
-import { execProbe, PROBE_TIMEOUT_MS } from './backend-probes'
+import { execProbe, isTimeoutError, PROBE_TIMEOUT_MS } from './backend-probes'
 import { resolveInstallationLauncher } from './updater-process'
 
 export interface SourceBackend {
@@ -52,8 +52,17 @@ export async function resolveSourceInstallationBackend(
       timeout: PROBE_TIMEOUT_MS,
       windowsHide: true
     })
-  } catch {
-    return null
+  } catch (error) {
+    // A timeout is inconclusive, not fatal. execProbe already retried once on
+    // timeout, so reaching here means the launcher outlived 2x the budget — but
+    // both its files are proven present above, so `null` would report a healthy
+    // install as absent and route the launch into a first-run setup wait for an
+    // install that needs no setup. Trust it; a launcher that is genuinely hung
+    // fails on its own start-up timeout with an honest error. Only a real
+    // failure (missing binary, non-zero exit) means "no usable install".
+    if (!isTimeoutError(error)) {
+      return null
+    }
   }
 
   return {
