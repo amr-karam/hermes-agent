@@ -1,0 +1,34 @@
+============================= test session starts =============================
+platform win32 -- Python 3.11.16, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\amrmo\workspace\hermes-agent\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\amrmo\workspace\hermes-agent
+configfile: pyproject.toml
+plugins: anyio-4.12.1, langsmith-0.12.4, asyncio-1.3.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+tests/tools/test_local_env_blocklist.py::test_adapter_and_provider_profile_secrets_never_reach_children[foreground] FAILED [100%]
+
+================================== FAILURES ===================================
+_ test_adapter_and_provider_profile_secrets_never_reach_children[foreground] __
+
+child_env = WindowsPath('C:/Users/amrmo/AppData/Local/Temp/pytest-of-amrmo/pytest-73/test_adapter_and_provider_prof0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000021F58DE3590>
+builder = 'foreground'
+
+>   ???
+E   AssertionError: assert {'A2A_PUSH_SE...Y': None, ...} == {'RAMP_ROUTER...Y': None, ...}
+E     
+E     Omitting 79 identical items, use -vv to show
+E     Differing items:
+E     {'TELEGRAM_WEBHOOK_SECRET': 'fake-TELEGRAM_WEBHOOK_SECRET'} != {'TELEGRAM_WEBHOOK_SECRET': None}
+E     {'YUANBAO_APP_SECRET': 'fake-YUANBAO_APP_SECRET'} != {'YUANBAO_APP_SECRET': None}
+E     {'WHATSAPP_CLOUD_ACCESS_TOKEN': 'fake-WHATSAPP_CLOUD_ACCESS_TOKEN'} != {'WHATSAPP_CLOUD_ACCESS_TOKEN': None}
+E     {'WHATSAPP_CLOUD_VERIFY_TOKEN': 'fake-WHATSAPP_CLOUD_VERIFY_TOKEN'} != {'WHATSAPP_CLOUD_VERIFY_TOKEN': None}...
+E     
+E     ...Full output truncated (189 lines hidden), use '-vv' to show
+
+tests\tools\test_local_env_blocklist.py:127: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/tools/test_local_env_blocklist.py::test_adapter_and_provider_profile_secrets_never_reach_children[foreground]
+============================== 1 failed in 3.52s ==============================
