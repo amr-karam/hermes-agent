@@ -29,7 +29,7 @@ import fire
 from rich.console import Console
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn
 
-from model_tools import TOOL_TO_TOOLSET_MAP
+from model_tools import TOOL_TO_TOOLSET_MAP, _ensure_discovered
 from run_agent import AIAgent
 from toolset_distributions import (
     list_distributions,
@@ -42,6 +42,10 @@ logger = logging.getLogger(__name__)
 # Auto-derived from model_tools so it stays in sync as tools are added. Gives every
 # trajectory a consistent tool_stats schema (Arrow/Parquet for HF datasets) and filters
 # corrupted entries (hallucinated tool names) when combining trajectories.
+# batch_runner is a standalone script (not on the `import run_agent` critical path),
+# so force discovery here so ALL_POSSIBLE_TOOLS reflects the real registry rather than
+# the empty lazy default left in model_tools until first dispatch.
+_ensure_discovered()
 ALL_POSSIBLE_TOOLS = set(TOOL_TO_TOOLSET_MAP.keys())
 
 DEFAULT_TOOL_STATS = {'count': 0, 'success': 0, 'failure': 0}

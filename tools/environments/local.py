@@ -20,17 +20,47 @@ from hermes_constants import get_process_hermes_home
 from tools.environments.base import BaseEnvironment
 from tools.environments.base_output import _pipe_stdin
 from hermes_cli._subprocess_compat import windows_hide_flags
-from tools.environments.local_env_policy import (
-    _ALWAYS_STRIP_FOLDED, _ALWAYS_STRIP_KEYS, _HERMES_PROVIDER_ENV_BLOCKLIST, _HERMES_PROVIDER_ENV_FORCE_PREFIX,
-    _is_hermes_internal_secret, _is_provider_env_blocklisted, _is_terminal_first_party_env,
-    _home_adapter_secret_env, _matches_terminal_first_party_prefix, _plugin_terminal_env_strip_keys,
-    _registered_adapter_secret_env, _registry_adapter_secret_env,
-    strip_profile_gate_env)
 from tools.environments.local_pythonpath import (
     _build_hermes_repo_root_aliases, _strip_hermes_owned_pythonpath_and_runtime_markers)
 
 
+__all__ = ()
+
+
 _IS_WINDOWS = platform.system() == "Windows"
+
+# Names that used to be imported at module level from local_env_policy are now
+# resolved lazily via module __getattr__ (PEP 562). Importing them at module
+# level triggered `from ... import` of hermes_cli.config → hermes_cli.auth,
+# whose plugin discovery reads OPTIONAL_ENV_VARS / bundled plugin manifests at
+# import time — the 7.1s cold-import bottleneck we removed. These names are
+# still available via `from tools.environments.local import NAME`, resolved on
+# first access instead.
+__LAZY_LOCAL_POLICY_NAMES = frozenset({
+    "_ALWAYS_STRIP_FOLDED", "_ALWAYS_STRIP_KEYS",
+    "_HERMES_PROVIDER_ENV_BLOCKLIST", "_HERMES_PROVIDER_ENV_FORCE_PREFIX",
+    "_is_hermes_internal_secret", "_is_provider_env_blocklisted",
+    "_is_terminal_first_party_env", "_home_adapter_secret_env",
+    "_matches_terminal_first_party_prefix", "_plugin_terminal_env_strip_keys",
+    "_registered_adapter_secret_env", "_registry_adapter_secret_env",
+    "strip_profile_gate_env",})
+
+
+def __getattr__(name: str):
+    """PEP 562 lazy module attribute: resolve local_env_policy names on first
+    `from ... import NAME` access so module import stays free of the
+    hermes_cli.config → hermes_cli.auth chain that scans bundled manifests at
+    import time. `import x` without a dotted attribute is unaffected."""
+    if name not in __LAZY_LOCAL_POLICY_NAMES:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    from tools.environments import local_env_policy as _lep
+    return getattr(_lep, name)
+
+
+def __dir__():
+    """Include lazy PEP 562 attributes in dir() output so frameworks can discover
+    them during `from ... import` and similar introspection."""
+    return sorted(set(list(globals().keys()) + list(__LAZY_LOCAL_POLICY_NAMES)))
 
 logger = logging.getLogger(__name__)
 
@@ -262,6 +292,10 @@ def _inject_session_context_env(env: dict) -> None:
 def _filter_secret_env(
     items: Mapping[str, str], out: dict, *, unwrap_force: bool,
     plugin_strip: frozenset = frozenset()) -> None:
+    from tools.environments.local_env_policy import (
+        _HERMES_PROVIDER_ENV_FORCE_PREFIX, _is_hermes_internal_secret,
+        _is_provider_env_blocklisted, _registered_adapter_secret_env,
+        _is_terminal_first_party_env)
     """Copy *items* into *out*, dropping Hermes-managed secrets. ``_HERMES_FORCE_<NAME>``
     unwraps to ``NAME`` when ``unwrap_force`` (caller extras / terminal env), else is
     dropped. Blocklisted names survive only via env_passthrough registration or as
@@ -330,6 +364,7 @@ def _scrubbed_env(parts, plugin_strip: frozenset, fix_path) -> dict:
 def _sanitize_subprocess_env(base_env: dict | None, extra_env: dict | None = None) -> dict:
     """Filter Hermes-managed secrets from a subprocess environment (background/PTY
     spawn path, search workers, computer-use driver, user-script runners)."""
+    from tools.environments.local_env_policy import _plugin_terminal_env_strip_keys
     return _scrubbed_env([(base_env or {}, False), (extra_env or {}, True)],
                          _plugin_terminal_env_strip_keys(), lambda p: p)
 
@@ -361,6 +396,10 @@ def hermes_subprocess_env(
 
 def _scrub_credentials(env: dict, *, inherit_credentials: bool) -> dict:
     """Tier 1 (always) and, unless ``inherit_credentials``, Tier 2 provider/tool credentials, in place."""
+    from tools.environments.local_env_policy import (
+        _ALWAYS_STRIP_FOLDED, _home_adapter_secret_env, _plugin_terminal_env_strip_keys,
+        _registry_adapter_secret_env, _is_provider_env_blocklisted,
+        _HERMES_PROVIDER_ENV_FORCE_PREFIX, _is_hermes_internal_secret)
     # Credential names fold to uppercase for membership: on Windows the env block
     # itself is case-insensitive, so a lowercase-stored ``gh_token`` IS GH_TOKEN.
     home_secrets = _home_adapter_secret_env()  # one manifest stamp per scrub
@@ -524,6 +563,7 @@ def strip_launch_profile_env(env: dict, target_home: str | Path | None = None) -
     # Authorization gates are the one residue a name list cannot see: a unit-file ``Environment=``
     # or an operator export never appears in the launch ``.env``, the secret scrub ignores
     # non-credentials, and the target's own ``.env`` rarely defines the key to overwrite it (#113270).
+    from tools.environments.local_env_policy import strip_profile_gate_env
     return strip_profile_gate_env(env)
 
 
@@ -1022,6 +1062,7 @@ class LocalEnvironment(BaseEnvironment):
         names), so under a multiplexed gateway profile A's BUZZ_PRIVATE_KEY would land
         in the snapshot and be sourced by profile B. Prefix-only and monotonic on
         purpose: conservative even when the context-gated carve-out is inactive."""
+        from tools.environments.local_env_policy import _matches_terminal_first_party_prefix
         merged = dict(os.environ | self.env)
         return tuple(sorted(
             name for name in merged

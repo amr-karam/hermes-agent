@@ -62,6 +62,14 @@ def _left_core_env(*, secrets_only: bool) -> frozenset:
 
 def _build_provider_env_blocklist() -> frozenset:
     """Derive the blocklist from provider, tool, and gateway config."""
+    # Ensure platform plugin manifests have populated OPTIONAL_ENV_VARS before we
+    # read them below (the injection is deferred to first use to keep import
+    # cheap; without this, the blocklist would miss every platform's env vars).
+    try:
+        from hermes_cli.config import _inject_platform_plugin_env_vars
+        _inject_platform_plugin_env_vars()
+    except Exception:
+        pass
     blocked: set[str] = set(_STATIC_PROVIDER_ENV_BLOCKLIST) | _left_core_env(secrets_only=False)
     try:
         from hermes_cli.auth import PROVIDER_REGISTRY
@@ -125,12 +133,27 @@ def _build_adapter_secret_env() -> frozenset:
 
 
 # Provider blocklist first: it imports hermes_cli.auth before hermes_cli.config, whose import
-# discovers provider plugins that expect a fully initialized auth registry.
-_PROVIDER_ENV_BLOCKLIST = _build_provider_env_blocklist()
-_ADAPTER_SECRET_ENV = _build_adapter_secret_env()
-_HERMES_PROVIDER_ENV_BLOCKLIST = _PROVIDER_ENV_BLOCKLIST | _ADAPTER_SECRET_ENV
-
+# discovers provider plugins that expect a fully initialized auth registry. _PROVIDER_ENV_BLOCKLIST,
+# _ADAPTER_SECRET_ENV, _HERMES_PROVIDER_ENV_BLOCKLIST (and _ALWAYS_STRIP_KEYS / _ALWAYS_STRIP_FOLDED
+# below) are built lazily on first access via module __getattr__ so importing this module does not
+# scan bundled plugin manifests or read OPTIONAL_ENV_VARS at import time (the 7.1s import bottleneck).
+# `_HOME_ADAPTER_SECRET_CACHE` stays eager: it is pure state, no I/O.
 _HOME_ADAPTER_SECRET_CACHE: dict[str, tuple] = {}
+
+
+def _lazy_attr(name: str):
+    """Resolve a lazily-built module attribute by name, from inside this module.
+
+    PEP 562's module ``__getattr__`` fires for attribute access (``mod.NAME``)
+    and for ``from mod import NAME`` -- but NOT for a bare global-name lookup
+    inside a function defined in this module, which goes straight to the module
+    globals and raises NameError. The lazy sets below are therefore read
+    through this helper (or imported explicitly at the call site).
+    """
+    value = globals().get(name)
+    if value is None:
+        value = __getattr__(name)  # builds and caches it in globals()
+    return value
 
 
 def _home_adapter_secret_env() -> frozenset:
@@ -148,7 +171,11 @@ def _home_adapter_secret_env() -> frozenset:
     cached = _HOME_ADAPTER_SECRET_CACHE.get(key)
     if cached is None or cached[0] is None or cached[0] != stamp:
         names, complete = platform_manifest_secret_scan(home)
-        names -= _ADAPTER_SECRET_ENV
+        # Read through the module's own lazy accessor: a bare global lookup here
+        # would NOT reach PEP 562's __getattr__ (that only fires for attribute
+        # access and `from module import NAME`), so the name must be resolved
+        # explicitly or it raises NameError.
+        names -= _lazy_attr("_ADAPTER_SECRET_ENV")
         if not complete and cached is not None:
             names |= cached[1]
         cached = (stamp if complete else None, names)
@@ -181,7 +208,8 @@ def _is_provider_env_blocklisted(name: str, _registered: frozenset | None = None
     ``_is_hermes_internal_secret``, which already folds (``key.upper()``). Loops pass
     ``_registered`` so the registry is read once per env, not once per key."""
     upper = name.upper()
-    if name in _HERMES_PROVIDER_ENV_BLOCKLIST or upper in _HERMES_PROVIDER_ENV_BLOCKLIST:
+    blocklist = _lazy_attr("_HERMES_PROVIDER_ENV_BLOCKLIST")
+    if name in blocklist or upper in blocklist:
         return True
     return upper in (_registered_adapter_secret_env() if _registered is None else _registered)
 
@@ -375,7 +403,10 @@ def _plugin_terminal_env_strip_keys() -> frozenset:
 # Tier-1 secrets: stripped from EVERY spawned subprocess even under inherit_credentials
 # (claude/codex/gemini). Not provider credentials — no child needs them and they are the
 # highest-value secrets to keep from a compromised dependency. Provider keys = Tier 2.
-_ALWAYS_STRIP_KEYS: frozenset[str] = frozenset({
+# Built lazily via module __getattr__ (below) since _ADAPTER_SECRET_ENV reads bundled plugin
+# manifests at import time (the 7.1s bottleneck). _STATIC_ALWAYS_STRIP_KEYS holds the static
+# literal; the union with adapter secrets and left-core secrets happens on first access.
+_STATIC_ALWAYS_STRIP_KEYS: frozenset[str] = frozenset({
     # GitHub auth
     "GH_TOKEN", "GITHUB_TOKEN", "GITHUB_APP_ID", "GITHUB_APP_PRIVATE_KEY_PATH",
     "GITHUB_APP_INSTALLATION_ID",
@@ -394,5 +425,52 @@ _ALWAYS_STRIP_KEYS: frozenset[str] = frozenset({
     "HERMES_DASHBOARD_OIDC_CLIENT_SECRET", "HERMES_DASHBOARD_DRAIN_SECRET",
     # Remote-compute / infrastructure secrets
     "MODAL_TOKEN_ID", "MODAL_TOKEN_SECRET", "DAYTONA_API_KEY",
-}) | _ADAPTER_SECRET_ENV | _left_core_env(secrets_only=True)  # every declared adapter secret is Tier 1
-_ALWAYS_STRIP_FOLDED: frozenset[str] = frozenset(k.upper() for k in _ALWAYS_STRIP_KEYS)
+})  # every declared adapter secret is Tier 1 — added lazily in __getattr__
+
+
+def __getattr__(name: str):
+    """PEP 562 lazy module attribute: build _PROVIDER_ENV_BLOCKLIST,
+    _ADAPTER_SECRET_ENV, _HERMES_PROVIDER_ENV_BLOCKLIST, _ALWAYS_STRIP_KEYS,
+    _ALWAYS_STRIP_FOLDED on first access so importing this module does not
+    scan bundled plugin manifests or read OPTIONAL_ENV_VARS at import time
+    (the 7.1s import bottleneck). `from ... import name` works because Python
+    falls back to module __getattr__ when the name is absent from __dict__."""
+    if name == "_PROVIDER_ENV_BLOCKLIST":
+        value = _build_provider_env_blocklist()
+        globals()[name] = value
+        return value
+    if name == "_ADAPTER_SECRET_ENV":
+        value = _build_adapter_secret_env()
+        globals()[name] = value
+        return value
+    if name == "_HERMES_PROVIDER_ENV_BLOCKLIST":
+        provider = globals().get("_PROVIDER_ENV_BLOCKLIST")
+        if provider is None:
+            provider = _build_provider_env_blocklist()
+            globals()["_PROVIDER_ENV_BLOCKLIST"] = provider
+        adapter = globals().get("_ADAPTER_SECRET_ENV")
+        if adapter is None:
+            adapter = _build_adapter_secret_env()
+            globals()["_ADAPTER_SECRET_ENV"] = adapter
+        value = provider | adapter
+        globals()[name] = value
+        return value
+    if name == "_ALWAYS_STRIP_KEYS":
+        adapter = globals().get("_ADAPTER_SECRET_ENV")
+        if adapter is None:
+            adapter = _build_adapter_secret_env()
+            globals()["_ADAPTER_SECRET_ENV"] = adapter
+        value = _STATIC_ALWAYS_STRIP_KEYS | adapter | _left_core_env(secrets_only=True)
+        globals()[name] = value
+        return value
+    if name == "_ALWAYS_STRIP_FOLDED":
+        adapter = globals().get("_ADAPTER_SECRET_ENV")
+        if adapter is None:
+            adapter = _build_adapter_secret_env()
+            globals()["_ADAPTER_SECRET_ENV"] = adapter
+        value = frozenset(
+            k.upper() for k in _STATIC_ALWAYS_STRIP_KEYS | adapter | _left_core_env(secrets_only=True)
+        )
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -123,8 +123,8 @@ from agent.credential_pool import load_pool
 from agent.custom_entry_pool import entry_scoped_pool, pool_for_aux_provider
 from agent.message_metadata import data_use_requirement
 from agent.model_metadata import MINIMUM_CONTEXT_LENGTH, get_model_context_length
-from hermes_cli.config import get_hermes_home
 from hermes_cli.config_providers import _canonical_api_mode
+from hermes_constants import get_hermes_home
 from agent.auxiliary_health import (
     _custom_health_base_url, _unhealthy_cache_key, fallback_candidate_quarantine_ttl,
     fallback_candidate_unavailable_reason,
@@ -5078,8 +5078,8 @@ def _resolve_custom_branch(req: _ResolveRequest) -> _ResolveResult:
         else:
             custom_key = (
                 _normalize_api_key(req.explicit_api_key)
-                or _scoped_key_env("OPENAI_API_KEY")
                 or _read_main_api_key_if_same_origin(custom_base)
+                or _scoped_key_env("OPENAI_API_KEY")
                 or "no-key-required"  # local servers don't need auth
             )
         if not custom_base:

@@ -216,7 +216,9 @@ class _Recovery(OverflowVerdict):
         return estimate_request_tokens_rough(self.api_messages, tools=self.agent.tools or None)
 
 
-def _recover_payload_too_large(st: _Recovery, _retry: TurnRetryState) -> OverflowVerdict:
+def _recover_payload_too_large(
+    st: _Recovery, _retry: TurnRetryState, error_msg: str = ""
+) -> OverflowVerdict:
     """413: compress and retry. A 413 is a BYTE-size error, so progress is scored in
     payload bytes — never the token estimate, which is deliberately byte-blind to images
     and wedged sessions on "no progress"."""
@@ -226,6 +228,38 @@ def _recover_payload_too_large(st: _Recovery, _retry: TurnRetryState) -> Overflo
     exhausted = st.count_attempt(payload_too_large=True)
     if exhausted is not None:
         return exhausted
+
+    # Fast-fail: if the provider explicitly reports a limit far below the request size,
+    # no amount of incremental compression can bridge the gap. Groq-style 413 bodies read
+    # "Limit 8000, Requested 56591" — when Requested exceeds 3x the Limit, summarisation
+    # (which typically frees 5-10% per pass) will never fit. Burn no more attempts; tell
+    # the user to /new or switch providers.
+    _limit: Optional[int] = None
+    _requested: Optional[int] = None
+    for _m in re.finditer(r"Limit\s+(\d+)\s*,?\s*Requested\s+(\d+)", error_msg or ""):
+        _limit = int(_m.group(1))
+        _requested = int(_m.group(2))
+    if (
+        _limit is not None
+        and _requested is not None
+        and _limit > 0
+        and _requested > _limit * 3
+    ):
+        return st.fail_turn(
+            site_copy("payload_too_large", model=agent.model),
+            notices=(
+                f"❌ Request is {_requested:,} tokens against this provider's {_limit:,}-token "
+                f"limit — compression cannot bridge that gap.",
+                "   💡 Try /new to start a fresh conversation, or switch to a provider/model "
+                "with a higher token budget.",
+            ),
+            log=(
+                "%s413 payload too large: requested %s tokens vs %s-token limit — "
+                "skipping compression, gap too wide.",
+                agent.log_prefix, f"{_requested:,}", f"{_limit:,}",
+            ),
+            compression_exhausted=False,
+        )
     agent._buffer_diagnostic_status(
         f"⚠️  Request payload too large (413) — compression attempt "
         f"{st.compression_attempts}/{st.max_compression_attempts}..."
@@ -489,7 +523,7 @@ def recover_from_overflow(
             agent._vprint(f"{agent.log_prefix}{line}", force=True, diagnostic=True)
 
     if classified.reason == FailoverReason.payload_too_large:
-        return _recover_payload_too_large(st, _retry)
+        return _recover_payload_too_large(st, _retry, error_msg=error_msg or "")
 
     # Relay-wrapped output-cap 429s (parsed by the caller) go to the clamp, not
     # failover or generic retries. The classifier also covers 400/disconnect +

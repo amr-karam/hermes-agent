@@ -19,6 +19,9 @@ def _handle_admitted_request(req: dict) -> dict | None:
     if isinstance(normalized, dict):
         return normalized
     rid, method, params = normalized
+    # Backwards compatibility aliases
+    if method == "delete.session":
+        method = "session.delete"
     if not (fn := _methods.get(method)):
         return _err(rid, -32601, f"unknown method: {method} — the client and the Hermes backend are out of sync "
                     "(different versions); run `hermes update` and restart both")
@@ -59,6 +62,13 @@ def dispatch(req: dict, transport: Optional[Transport] = None) -> dict | None:
         normalized = _normalize_request(req)
         if isinstance(normalized, dict):
             return normalized
+        rid, method, params = normalized
+        # Backwards compatibility aliases
+        if method == "delete.session":
+            method = "session.delete"
+            req = dict(req)
+            req["method"] = method
+            normalized = (rid, method, params)
         if normalized[1] not in _LONG_HANDLERS:
             return handle_request(req)
         from hermes_cli.backend_retirement import retirement

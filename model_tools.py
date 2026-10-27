@@ -146,31 +146,51 @@ def _run_async(coro):
 
 
 # --- Tool discovery (importing each tools/*.py triggers registry.register) ---
-discover_builtin_tools()
+# Lazily deferred: discovery now runs on first tool dispatch/definition
+# (via _ensure_discovered()) instead of at import time. This removes a ~3.7s
+# self-cost from every cold `import run_agent` when no tool is ever used.
+_discovered: bool = False
 
 # MCP discovery is deliberately NOT run here: it blocks up to 120 s and the
 # gateway lazy-imports this module inside its event loop; each entry point
 # (gateway/run.py, cli.py, tui_gateway, acp_adapter) runs it at startup.
-try:  # plugin tool discovery (user/project/pip plugins)
-    # MCP tool discovery (external MCP servers from config) used to run here as a module-level side effect.
-    # It was removed because discover_mcp_tools() internally uses a blocking future.result(timeout=120)
-    # wait, and the gateway lazy-imports this module from inside the asyncio event loop on the first user
-    # message — freezing Discord/Telegram heartbeats for up to 120s whenever any configured MCP server was
-    # slow or unreachable (#16856). - gateway/run.py            -> start_gateway() uses run_in_executor -
-    # acp_adapter/server.py     -> asyncio.to_thread on session init
-    from hermes_cli.plugins import discover_plugins
-    discover_plugins()
-except Exception as e:
-    logger.debug("Plugin discovery failed: %s", e)
 
 
-# Backward-compat constants (built once after discovery)
-TOOL_TO_TOOLSET_MAP: dict[str, str] = registry.get_tool_to_toolset_map()
+# Backward-compat constants — populated lazily by _ensure_discovered().
+# Populated in-place (clear + update) so existing `from model_tools import ...`
+# references see the same objects after discovery.
+TOOL_TO_TOOLSET_MAP: dict[str, str] = {}
 
-TOOLSET_REQUIREMENTS: dict[str, dict] = registry.get_toolset_requirements()
+TOOLSET_REQUIREMENTS: dict[str, dict] = {}
 
 # Tool names from the last get_tool_definitions() call (execute_code sandbox fallback).
 _last_resolved_tool_names: list[str] = []
+
+
+def _ensure_discovered() -> None:
+    """Run built-in + plugin tool discovery once, on first use.
+
+    Idempotent and cheap on the hot path (a boolean flag check). Populates
+    TOOL_TO_TOOLSET_MAP / TOOLSET_REQUIREMENTS in-place so module-level
+    imports of those names stay in sync.
+    """
+    global _discovered
+    if _discovered:
+        return
+    try:  # plugin tool discovery (user/project/pip plugins)
+        from hermes_cli.plugins import discover_plugins
+
+        discover_plugins()
+    except Exception as e:
+        logger.debug("Plugin discovery failed: %s", e)
+    discover_builtin_tools()
+    # Rebuild the backward-compat maps in-place so `from model_tools import`
+    # references keep pointing at the same (now populated) dict objects.
+    TOOL_TO_TOOLSET_MAP.clear()
+    TOOL_TO_TOOLSET_MAP.update(registry.get_tool_to_toolset_map())
+    TOOLSET_REQUIREMENTS.clear()
+    TOOLSET_REQUIREMENTS.update(registry.get_toolset_requirements())
+    _discovered = True
 
 
 # Legacy toolset names (old _tools-suffixed names -> tool name lists)
@@ -218,6 +238,7 @@ def get_tool_definitions(enabled_toolsets: Optional[list[str]] = None, disabled_
     skip_tool_search_assembly returns raw schemas for every enabled tool — only
     the tool_search bridge should use it (it reads the real, uncollapsed catalog).
     """
+    _ensure_discovered()
     def compute():
         return _compute_tool_definitions(enabled_toolsets, disabled_toolsets, quiet_mode,
                                          skip_tool_search_assembly=skip_tool_search_assembly)
@@ -879,6 +900,7 @@ def handle_function_call(
     it (single-fire contract). enabled/disabled_toolsets scope the Tool Search
     bridge catalog to this session's grant (None = unrestricted).
     """
+    _ensure_discovered()
     function_args = coerce_tool_args(function_name, function_args)
     if not isinstance(function_args, dict):
         function_args = {}
@@ -973,14 +995,17 @@ def get_toolset_for_tool(tool_name: str) -> Optional[str]:
 
 def get_available_toolsets() -> dict[str, dict]:
     """Toolset availability info for UI display."""
+    _ensure_discovered()
     return registry.get_available_toolsets()
 
 
 def check_toolset_requirements() -> dict[str, bool]:
     """{toolset: available_bool} for every registered toolset."""
+    _ensure_discovered()
     return registry.check_toolset_requirements()
 
 
 def check_tool_availability(quiet: bool = False) -> tuple[list[str], list[dict]]:
     """(available_toolsets, unavailable_info)."""
+    _ensure_discovered()
     return registry.check_tool_availability(quiet=quiet)
