@@ -1,9 +1,9 @@
-# OpenOpenRig WSL2 fleet task registration — PowerShell entry point.
+# OpenRig remote fleet task registration — PowerShell entry point.
 #
-# Registers `openrig-up.sh` as a Windows Scheduled Task so the WSL2 fleet
-# restores its seats on boot / at a configured interval without manual
-# intervention. Designed to be idempotent: re-running replaces the existing
-# task definition rather than creating duplicates.
+# Registers an SSH-based Windows Scheduled Task that triggers OpenRig fleet
+# seat restore on the remote host (19.16.1.100) at a configured interval
+# without manual intervention. Designed to be idempotent: re-running replaces
+# the existing task definition rather than creating duplicates.
 #
 # Requires elevation (Administrator). Task Scheduler stores the task under
 # \OpenOpenRig so it can be found/enabled/disabled via Task Scheduler MMC or
@@ -24,7 +24,9 @@ param(
     [string]$Interval = "00:15:00",
     [string]$TaskName = "OpenOpenRigFleetRestore",
     [string]$TaskPath = "\OpenOpenRig",
-    [string]$OpenrigUpScript = "",
+    [string]$OpenrigHost = "19.16.1.100",
+    [string]$OpenrigUser = "root",
+    [string]$OpenrigCommand = "bash -lc 'cd /opt/openrig && bash openrig-up.sh'",
     [string]$User = "SYSTEM",
     [switch]$HighestPrivilege
 )
@@ -45,23 +47,14 @@ if (-not (Test-Elevated)) {
     exit 3
 }
 
-# Resolve the openrig-up.sh target (must exist before we can register it).
-if (-not $OpenrigUpScript) { $OpenrigUpScript = Join-Path $PSScriptRoot "..\..\openrig-up.sh" }
-$OpenrigUpScript = (Resolve-Path -LiteralPath $OpenrigUpScript -ErrorAction Stop).Path
-$OpenrigUpDir    = Split-Path -Parent $OpenrigUpScript
+# Remote OpenRig host is the restore target; no local script required.
 
 function New-OpenrigTaskAction {
-    # WSL path for the scheduled task action. wsl.exe must be on PATH.
-    $wsl = Get-Command wsl -ErrorAction SilentlyContinue
-    if (-not $wsl) { Write-Error "wsl.exe not found on PATH — install WSL and ensure wsl.exe is available."; exit 4 }
+    # SSH action for the scheduled task. ssh.exe (OpenSSH client) must be on PATH.
+    $ssh = Get-Command ssh -ErrorAction SilentlyContinue
+    if (-not $ssh) { Write-Error "ssh.exe not found on PATH — install OpenSSH Client and ensure ssh.exe is available."; exit 4 }
 
-    $relative = Resolve-Path -LiteralPath $OpenrigUpScript -Relative
-    # `openrig-up.sh` lives at repo root; pass it as a WSL path so WSL resolves it.
-    $wslPath = "$relative"
-    if ($wslPath -notmatch "^/") { $wslPath = "/$wslPath" }
-    $wslPath = $wslPath.Replace("\", "/")
-
-    New-ScheduledTaskAction -Execute "wsl.exe" -Argument "bash -lc 'cd /mnt/c/Users/amrmo/workspace/hermes-agent && bash openrig-up.sh'" -WorkingDirectory $OpenrigUpDir
+    New-ScheduledTaskAction -Execute "ssh.exe" -Argument "$OpenrigUser@$OpenrigHost $OpenrigCommand" -WorkingDirectory $null
 }
 
 function New-OpenrigTaskTrigger {
@@ -109,7 +102,7 @@ function Register-OpenrigTask {
         -Force
 
     Write-Host "Registered scheduled task: $fullPath" -ForegroundColor Green
-    Write-Host "  Action: wsl.exe bash openrig-up.sh" -ForegroundColor Gray
+    Write-Host "  Action: ssh.exe $OpenrigUser@$OpenrigHost $OpenrigCommand" -ForegroundColor Gray
     Write-Host "  Trigger: $(if ($Once) { "Once + repeat every $Interval" } else { "Daily + repeat every $Interval" })" -ForegroundColor Gray
 }
 

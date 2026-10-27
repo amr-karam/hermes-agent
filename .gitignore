@@ -95,3 +95,6 @@ anima-project/milvus-repo/
 # Embedded external projects (not part of Hermes)
 anima-project/
 milvus-repo/
+
+# Hermes runtime home (user state, not source)
+.hermes/
