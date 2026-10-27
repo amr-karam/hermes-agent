@@ -131,7 +131,7 @@ _TOKEN_COALESCE_S = 0.033
 
 # starlette stays optional at import time; fall back to a generic sentinel.
 try:
-    from starlette.websockets import WebSocketDisconnect as _WebSocketDisconnect
+    from starlette.websockets import WebSocketDisconnect as _WebSocketDisconnect, WebSocketState
 except ImportError:  # pragma: no cover - starlette is a required install path
     _WebSocketDisconnect = Exception  # type: ignore[assignment]
 
@@ -663,19 +663,37 @@ async def handle_ws(ws: Any, *, auth_identity: dict | None = None, subprotocol: 
         if not ready_ok:
             disconnect_reason = "ready_send_failed"
             send_failures += 1
-            _log.error("ws ready frame send failed peer=%s", peer)
+            # Client hung up right after accept; not a server error. Teardown runs in finally.
+            _log.debug("ws ready frame send failed peer=%s", peer)
             return
 
         dispatcher = asyncio.create_task(_dispatch_loop())
         while True:
             try:
-                raw = await _unless_dispatch_failed(ws.receive_text())
+                # Guard: receive_text on a socket that was never accepted or was closed mid-handshake
+                # raises RuntimeError("WebSocket is not connected. Need to call 'accept' first.").
+                state = getattr(ws, "application_state", None)
+                if state is not None and state != WebSocketState.CONNECTED:
+                    disconnect_reason = "receive_not_connected"
+                    _log.warning(
+                        "ws receive on non-connected socket peer=%s (treat as clean disconnect)", peer
+                    )
+                    break
+                raw = await ws.receive_text()
                 _note_dashboard_client_activity()
             except _SendFailed:
                 raise
             except _WebSocketDisconnect as exc:
                 disconnect_reason = f"client_disconnect(code={getattr(exc, 'code', None)},reason={getattr(exc, 'reason', None)})"
                 break
+            except RuntimeError as exc:
+                if "not connected" in str(exc).lower() or "accept" in str(exc).lower():
+                    disconnect_reason = "receive_not_connected"
+                    _log.warning(
+                        "ws receive not connected peer=%s (treat as clean disconnect)", peer
+                    )
+                    break
+                raise
             except Exception:
                 disconnect_reason = "receive_failed"
                 _log.exception("ws receive failed peer=%s", peer)

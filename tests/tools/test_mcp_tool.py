@@ -689,6 +689,42 @@ class TestSchemaConversion:
             == schema["name"]
         )
 
+    def test_clamped_names_are_summarised_once_per_server_not_per_tool(self, caplog):
+        """The 64-char clamp is recomputed on every health refresh, so warning per name floods the
+        log (one Cloudflare server clamps ~200 generated names) and buries real MCP failures. The
+        contract: one WARNING per server carrying the count of DISTINCT clamped names, per-name
+        detail at DEBUG, and re-running the batch adds no further warning.
+        """
+        import uuid
+
+        from tools.mcp_tool_schema import _convert_mcp_schema, log_clamped_name_summary
+
+        # Unique per run: the summary is intentionally once-per-process, so a fixed server name
+        # would make a re-run of this test in the same process silently pass.
+        server = f"agent_plugin_clamp_{uuid.uuid4().hex[:8]}__my_server"
+        tools = [_make_mcp_tool(name=f"reply_communication_{i}") for i in range(5)]
+
+        with caplog.at_level("WARNING", logger="tools.mcp_tool"):
+            for t in tools:
+                _convert_mcp_schema(server, t)
+            log_clamped_name_summary(server)
+            # Second batch (a health refresh) must stay silent: the count is distinct-name based.
+            for t in tools:
+                _convert_mcp_schema(server, t)
+            log_clamped_name_summary(server)
+            # A server whose names all fit never produces a summary.
+            log_clamped_name_summary(f"short_{uuid.uuid4().hex[:8]}")
+
+        clamp_warnings = [
+            r for r in caplog.records
+            if "provider limit" in r.getMessage() and r.levelname == "WARNING"
+        ]
+        assert len(clamp_warnings) == 1
+        assert f"'{server}'" in clamp_warnings[0].getMessage()
+        assert "5 tool name(s)" in clamp_warnings[0].getMessage()
+        assert all(r.levelname == "DEBUG" for r in caplog.records
+                   if "provider limit" in r.getMessage() and r is not clamp_warnings[0])
+
 
 # ---------------------------------------------------------------------------
 # Check function
@@ -1557,7 +1593,14 @@ class TestBuildSafeEnv:
         assert "NOTION_TOKEN" not in result
 
     def test_windows_location_vars_passed_without_secrets(self):
-        """Windows launcher tools need location vars, but secrets stay filtered."""
+        """Windows launcher tools need location vars, but secrets stay filtered.
+
+        Lookups are case-insensitive because the host decides the key case: on Windows
+        ``os.environ`` stores every entry uppercased, so a mixed-case fixture key never
+        survives to be read back. The contract is that each Windows location var reaches
+        the child (Windows env lookup is case-insensitive either way) and that credentials
+        do not.
+        """
         from tools.mcp_tool_config import _build_safe_env
 
         fake_env = {
@@ -1574,14 +1617,16 @@ class TestBuildSafeEnv:
         with patch.dict("os.environ", fake_env, clear=True):
             result = _build_safe_env(None)
 
-        assert result["PROGRAMFILES"] == r"C:\Program Files"
-        assert result["PROGRAMDATA"] == r"C:\ProgramData"
-        assert result["PROGRAMW6432"] == r"C:\Program Files"
-        assert result["LOCALAPPDATA"].endswith("Local")
-        assert result["APPDATA"].endswith("Roaming")
-        assert result["USERPROFILE"] == r"C:\Users\alice"
-        assert "GITHUB_TOKEN" not in result
-        assert "OPENAI_API_KEY" not in result
+        lookup = {k.upper(): v for k, v in result.items()}
+
+        assert lookup["PROGRAMFILES"] == r"C:\Program Files"
+        assert lookup["PROGRAMDATA"] == r"C:\ProgramData"
+        assert lookup["PROGRAMW6432"] == r"C:\Program Files"
+        assert lookup["LOCALAPPDATA"].endswith("Local")
+        assert lookup["APPDATA"].endswith("Roaming")
+        assert lookup["USERPROFILE"] == r"C:\Users\alice"
+        assert "GITHUB_TOKEN" not in lookup
+        assert "OPENAI_API_KEY" not in lookup
 
 
 # ---------------------------------------------------------------------------

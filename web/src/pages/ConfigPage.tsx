@@ -1,41 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, useMemo } from "react";
-import {
-  Code,
-  Download,
-  FormInput,
-  RotateCcw,
-  Search,
-  Upload,
-  X,
-  Settings2,
-  FileText,
-  Settings,
-  Bot,
-  Monitor,
-  Palette,
-  Users,
-  Brain,
-  Package,
-  Lock,
-  Globe,
-  Mic,
-  Volume2,
-  Ear,
-  ClipboardList,
-  MessageCircle,
-  Wrench,
-  FileQuestion,
-  Filter,
-  Cloud,
-  Sparkles,
-  LayoutDashboard,
-  BookOpen,
-  Route,
-  History,
-  Shield,
-  FileOutput,
-  RefreshCw,
-} from "lucide-react";
+import { IconCode as Code, IconDownload as Download, IconForms as FormInput, IconRotateClockwise as RotateCcw, IconSearch as Search, IconUpload as Upload, IconX as X, IconAdjustments as Settings2, IconFileText as FileText, IconSettings as Settings, IconRobot as Bot, IconDeviceDesktop as Monitor, IconPalette as Palette, IconUsers as Users, IconBrain as Brain, IconPackage as Package, IconLock as Lock, IconWorld as Globe, IconMicrophone as Mic, IconVolume as Volume2, IconEar as Ear, IconClipboardList as ClipboardList, IconMessageCircle as MessageCircle, IconTool as Wrench, IconFileUnknown as FileQuestion, IconFilter as Filter, IconCloud as Cloud, IconSparkles as Sparkles, IconLayoutDashboard as LayoutDashboard, IconBook as BookOpen, IconRoute as Route, IconHistory as History, IconShield as Shield, IconFileExport as FileOutput, IconRefresh as RefreshCw } from "@tabler/icons-react";
 import { api } from "@/lib/api";
 import { getNestedValue, setNestedValue } from "@/lib/nested";
 import { useToast } from "@nous-research/ui/hooks/use-toast";

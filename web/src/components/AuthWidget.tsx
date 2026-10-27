@@ -28,7 +28,7 @@ import { api, type AuthMeResponse } from "@/lib/api";
 import { ApiError } from "@/lib/api-error";
 import { shouldHideAuthWidget } from "./auth-widget-visibility";
 import { cn } from "@/lib/utils";
-import { LogOut } from "lucide-react";
+import { IconLogout as LogOut } from "@tabler/icons-react";
 
 interface AuthWidgetProps {
   className?: string;

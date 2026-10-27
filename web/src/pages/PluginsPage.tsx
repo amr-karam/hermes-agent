@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ExternalLink, RefreshCw, Trash2, Eye, EyeOff } from "lucide-react";
+import { IconExternalLink as ExternalLink, IconRefresh as RefreshCw, IconTrash as Trash2, IconEye as Eye, IconEyeOff as EyeOff } from "@tabler/icons-react";
 import type { Translations } from "@/i18n/types";
 import { Link } from "react-router";
 import { api } from "@/lib/api";

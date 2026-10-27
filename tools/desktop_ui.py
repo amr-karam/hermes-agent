@@ -15,7 +15,6 @@ the frame on the correct transcript transport (#80678).
 import json
 from typing import Callable, FrozenSet, Optional
 
-from gateway.session_context import get_session_env
 from tools.registry import tool_error
 
 # (sid, event, payload) sink, installed by the desktop gateway.
@@ -60,13 +59,10 @@ def emit(event: str, payload: dict) -> bool:
     """Route ``event`` to the window owning the current turn; False when no emitter."""
     if _emit is None:
         return False
-    if event in _SESSION_SCOPED_EVENTS:
-        sid = get_session_env("HERMES_SESSION_ID", "")
-        if not sid:
-            sid = get_session_env("HERMES_UI_SESSION_ID", "")
-    else:
-        sid = get_session_env("HERMES_UI_SESSION_ID", "")
-    _emit(sid, event, payload)
+    # Deferred: gateway.session_context pulls the gateway + auth + httpx stack, and
+    # importing it at module load made every tool discovery pay seconds for it.
+    from gateway.session_context import get_session_env
+    _emit(get_session_env("HERMES_UI_SESSION_ID", ""), event, payload)
     return True
 
 

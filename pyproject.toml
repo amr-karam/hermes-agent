@@ -37,29 +37,17 @@ dependencies = [
   # extra and gets prepared through PM when the
   # user picks that backend. Smaller `dependencies` = smaller blast
   # radius for the next supply-chain attack.
-  "openai==2.54.0; python_version >= '3.14'",
-  "certifi==2026.10.19; python_version >= '3.14'",
-  # TLS trust comes from the OS certificate store (agent/ssl_verify.py), so
-  # a corporate/internal root installed on the machine just works. certifi
-  # above stays a direct pin because httpx/requests/openai each depend on
-  # it regardless; it is no longer OUR trust source.
-  # ssl_verify uses truststore's private original SSLContext for explicit CA overrides.
-  # Keep this exact until that path has a public-API replacement.
-  "truststore==0.10.5; python_version >= '3.14'",
-  "python-dotenv==1.2.4; python_version >= '3.14'",
-  "fire==0.7.1; python_version >= '3.14'",
-  "httpx[socks]==0.28.1; python_version >= '3.14'",
-  "rich==14.3.4; python_version >= '3.14'",
-  "tenacity==9.2.1; python_version >= '3.14'",
-  "tomli-w==1.2.0; python_version >= '3.14'",  # Preserve relative dependency paths in staged plugin metadata.
-  # 0.18.17 requires ruamel.yaml.clib on 3.14, which has no Windows ARM64 wheel.
-  "ruamel.yaml==0.18.16; python_version >= '3.14'",
-  # 0.18.16 only pulls in its C parser below 3.14, so every 3.14 install parsed YAML
-  # (plugin manifests, config) in pure Python: ~5 s of gateway startup on 1 vCPU.
-  # Declared where clib ships a cp314 wheel; elsewhere hermes_yaml falls back to pure.
-  "ruamel.yaml.clib==0.2.15; python_version >= '3.14' and platform_python_implementation == 'CPython' and (sys_platform == 'darwin' or (sys_platform == 'linux' and platform_machine in 'x86_64 aarch64 i686') or (sys_platform == 'win32' and platform_machine in 'AMD64 x86'))",
-  "requests==2.34.2; python_version >= '3.14'",  # CVE-2026-25645
-  "jinja2==3.1.6; python_version >= '3.14'",
+  "openai==2.45.0",
+  "certifi==2026.5.20",
+  "python-dotenv==1.2.2",
+  "fire==0.7.1",
+  "httpx[socks]==0.28.1",
+  "rich==14.3.3",
+  "tenacity==9.1.4",
+  "pyyaml==6.0.3",
+  "ruamel.yaml==0.18.17",
+  "requests==2.33.0",  # CVE-2026-25645
+  "jinja2==3.1.6",
   # Document-to-Markdown extraction for read_file (PDF, legacy Office,
   # OpenDocument, RTF, EPUB) + typed NeedsOcrError for scanned pages.
   # Bundled in core by maintainer decision (read_file is a core tool and
@@ -333,49 +321,17 @@ wake = [
   "sounddevice==0.5.6",
   "numpy==2.5.4",
 ]
-# Platform sub-extras / alias extras — declared so pm.extras.ANCHORS names
-# only real extras (contract: tests/pm/test_extras.py). Each is
-# lazy-installed at first use via pm.ensure_import(name) and therefore
-# deliberately NOT in [all] (see tests/test_project_metadata.py's
-# lazy_covered_extras list — keep that list in sync when adding here).
-telegram = ["python-telegram-bot[webhooks]==22.8"]
-discord = ["discord.py[voice]==2.7.1"]
-# stt-whisper + audio-io compose [voice] (faster-whisper / sounddevice / numpy).
-stt-whisper = [
-  "faster-whisper==1.2.1; (platform_machine != 'ARM64' or sys_platform != 'win32') and (platform_machine != 'x86_64' or platform_system != 'Darwin') and sys_platform != 'android'",
-]
-audio-io = ["sounddevice==0.5.6", "numpy==2.5.4"]
-# WeChat voice decode (tools/transcription_tools.py self-heal path).
-silk = ["pilk==0.2.4"]
-# Wake-engine sub-extras — lazy per-engine installs so a user who only wants
-# sherpa-onnx doesn't pull the whole [wake] bundle. Pins match [wake].
-wake-openwakeword = [
-  "pyopen-wakeword==1.1.0; (platform_machine != 'ARM64' or sys_platform != 'win32') and (platform_machine != 'x86_64' or sys_platform != 'darwin')",
-]
-wake-sherpa = [
-  "sherpa-onnx==1.13.8",
-  # Required by the sherpa-onnx wheel. See [wake] for why it is explicit.
-  "sherpa-onnx-core==1.13.8",
-  "sentencepiece==0.2.2",
-  "pypinyin==0.55.0",
-]
-wake-porcupine = ["pvporcupine==4.0.3"]
-# Google Chat service account push (gateway/platforms/google_chat) — pubsub
-# subscriber for the Chat API's Cloud Pub/Sub delivery.
-# grpcio (pubsub's native transitive) has no win_arm64 wheel, so win32-arm64
-# would build its sdist and fail — gate the whole extra off there like
-# faster-whisper. The adapter's pubsub import is lazy, so this just makes the
-# google-chat platform unavailable on win32-arm64.
-google-chat = [
-  "google-cloud-pubsub==2.43.0; platform_machine != 'ARM64' or sys_platform != 'win32'",
-]
-# Document extraction (read_file anydoc converter self-heal) — core already
-# bundles firecrawl-anydoc==0.2.4; the extra exists so a lean/broken install
-# can re-sync exactly the pin from core.
-doc-extract = ["firecrawl-anydoc==0.2.4"]
-trace-upload = ["huggingface-hub==1.33.0"]
-# Cloud memory providers are opt-in PM extras. They stay outside [all]
-# so a quarantined release cannot break fresh installs.
+honcho = ["honcho-ai==2.2.0"]
+# Cloud memory providers — opt-in, lazy-installed via tools/lazy_deps.py
+# (memory.supermemory / memory.mem0) at first use. Where BOTH pin exactly the
+# versions MUST match (enforced by tests/test_project_metadata.py); LAZY_DEPS
+# entries that mirror a plugin.yaml range (mem0ai) keep the
+# extra as the floor install and never downgrade a newer compatible release.
+# Deliberately excluded from [all] like honcho so a quarantined
+# upstream release can't break fresh installs.
+supermemory = ["supermemory==3.50.0"]
+mem0 = ["mem0ai==2.0.10"]
+hindsight = ["hindsight-all==0.8.0"]
 # Image resize recovery for the vision tools. Pillow is now a CORE dependency
 # (see the main `dependencies` list above) since the byte/pixel shrink paths are on
 # the default vision-embed path and the mid-session lazy install deadlocked the
@@ -438,13 +394,14 @@ mistral = ["mistralai==2.10.1"]
 # OTLP/HTTP exporter for monitoring.gateway_health_export. Lazy-installed via
 # PM on first use; never a core dependency and deliberately
 # NOT in [all].
-otlp = [
-  "opentelemetry-sdk==1.45.1",
-  "opentelemetry-exporter-otlp-proto-http==1.45.1",
-]
-bedrock = ["boto3==1.43.115"]
-vertex = ["google-auth==2.62.0"]
-azure-identity = ["azure-identity==1.26.0"]
+otlp = ["opentelemetry-sdk==1.44.0", "opentelemetry-exporter-otlp-proto-http==1.44.0"]
+bedrock = ["boto3==1.42.89"]
+vertex = ["google-auth==2.56.0"]
+azure-identity = ["azure-identity==1.25.3"]
+# LangChain framework for building LLM applications (lazy-installed via tools/lazy_deps.py)
+langchain = ["langchain==1.4.2", "langchain-openai==1.6.6"]
+# LangGraph: stateful multi-agent workflows built on LangChain (lazy-installed via tools/lazy_deps.py)
+langgraph = ["langgraph==1.2.12", "langchain==1.4.2"]
 termux = [
   # Baseline Android / Termux path for reliable fresh installs.
   "python-telegram-bot[webhooks]==22.8",
@@ -471,16 +428,30 @@ dingtalk = [
 feishu = ["lark-oapi==1.7.5", "qrcode==7.4.2"]
 google = [
   # Required by the google-workspace skill (Gmail, Calendar, Drive, Contacts,
-  # Sheets, Docs). Declared here so PM environments and independent
-  # packagers can include them without mutating an application's runtime.
-  "google-api-python-client==2.201.0",
-  "google-auth==2.62.0",
-  "google-auth-oauthlib==1.5.0",
-  "google-auth-httplib2==0.4.4",
+  # Sheets, Docs).  Declared here so dev environments (`uv sync --extra google`)
+  # and packagers ship them without hitting runtime `pip install` paths that
+  # fail in environments without pip (e.g. Nix-managed Python).
+  "google-api-python-client==2.194.0",
+  "google-auth==2.56.0",
+  "google-auth-oauthlib==1.3.1",
+  "google-auth-httplib2==0.3.1",
   # The Google SDKs permit older vulnerable transitives, so unlocked installs
   # must carry the same fixed floors as uv.lock and the runtime installers:
   # httplib2 0.32.0 (GHSA-j5g9-f88f-gfj3 decompression bomb DoS),
-  # pyasn1 0.6.4, google-auth 2.55.1.
+  # pyasn1 0.6.4, google-auth 2.56.0.
+  "httplib2==0.32.0",
+  "pyasn1==0.6.4",
+]
+google-chat = [
+  # Google Chat adapter (Pub/Sub inbound + Chat REST). Kept out of [all] so a
+  # quarantined google-cloud-pubsub cannot break every fresh install; Docker
+  # bakes `--extra google-chat` and lazy_deps installs into
+  # HERMES_LAZY_INSTALL_TARGET on sealed hosted images.
+  "google-cloud-pubsub==2.39.0",
+  "google-api-python-client==2.194.0",
+  "google-auth==2.56.0",
+  "google-auth-oauthlib==1.3.1",
+  "google-auth-httplib2==0.3.1",
   "httplib2==0.32.0",
   "pyasn1==0.6.4",
 ]
@@ -649,17 +620,161 @@ override-dependencies = [
   # Remove this line when misaki drops it or a 3.14-capable release fits.
   "spacy-curated-transformers; sys_platform == 'never'",
 ]
-# Release-age check: Hermes's dependencies must be at least 3 days old when Hermes
-# locks them. It runs where uv.lock is resolved (`hermes pm lock`, and CI's lock
-# check), never on users' machines: PM installs from this vetted lock and drops the
-# cutoff from what it generates (pm/workspace.py::_trust_core_lock), because many
-# package mirrors publish no upload times and uv rejects a file it cannot date
-# (#135589). Exact pins follow the same 3-day rule. The one exemption is CA
-# trust stores: a release that revokes or distrusts a compromised CA must reach
-# the lock the day it ships, because holding it back keeps the bad root trusted.
-# Only packages whose job is CA trust belong in exclude-newer-package.
-exclude-newer = "3 days"
-exclude-newer-package = { certifi = false }
+exclude-newer = "14 days"
+# h2: temporary exclude-newer exception for the CVE-2026-71554 (GHSA-6hr6-w5qg-qmwg,
+# request-smuggling) fix in 4.4.1, published 2026-08-03. Remove after 2026-08-17.
+# aiohttp, cryptography: same shape — the advisory fixes are newer than the
+# 14-day window, so the resolver cannot see them without an exception.
+#
+# defusedxml, python-olm, unpaddedbase64: the OPPOSITE shape (#80387, #79434,
+# #78227 family). These are ancient, effectively frozen releases (2021-2023)
+# whose upload dates are frequently absent from mirror indexes and stale uv
+# HTTP caches. uv treats a missing upload date as "newer than the cutoff" and
+# excludes the package, bricking [youtube]/[wecom]/[matrix] resolution
+# ("there are no versions of defusedxml"). Exempting them carries zero aging
+# risk — their newest releases are years old — and unbricks resolvers that
+# cannot see upload dates.
+#
+# setuptools, wheel, pillow, mcp: build/core pin bricks (#78227, #75992, #76020, #96488). uv
+# applies exclude-newer to build-system.requires and core deps too; when a
+# resolver cannot see an upload date (old uv, mirror index, stale HTTP cache)
+# it filters the pinned version and the package cannot even BUILD
+# ("No solution found when resolving: setuptools==83.0.0"). These deps are
+# exact-pinned (==X.Y.Z), so exclude-newer adds zero float protection for
+# them — the version cannot move without a reviewed pin bump — while the
+# cutoff can still brick installs. Exempting exact pins is pure brick-risk
+# removal at no supply-chain cost. Guarded by
+# tests/test_packaging_metadata.py::test_build_system_requires_exempt_from_exclude_newer.
+#
+# firecrawl-anydoc: same exact-pin shape (==0.2.4, hosted-OCR wiring PR).
+# The pin bump WAS the review; exclude-newer adds zero float protection to
+# an exact pin and would only delay the reviewed version 14 days.
+#
+# Every other exact-pinned package below: the release-day brick shape
+# (observed 2026-08-29 updating three long-running installs v0.20.0 ->
+# v0.20.6 — one Termux, two Linux servers). Each release exact-pins at least
+# one dependency to a version published days before the release (v0.20.6
+# pinned snowballstemmer==3.1.1 and psutil==7.2.2 in core, plus fastapi /
+# uvicorn / python-telegram-bot pins across extras). For two weeks after
+# release the cutoff filters those versions out, so any venv that predates
+# the release bricks on `hermes update` ("no version of
+# snowballstemmer==3.1.1") until the window passes. Same zero-float-
+# protection logic as setuptools/pillow/mcp above; enforced for every exact
+# pin by
+# tests/test_packaging_metadata.py::test_exact_pinned_deps_exempt_from_exclude_newer.
+#
+# maturin, setuptools-rust: build-system.requires of the cryptography pin
+# above. cryptography itself is exempted, but on wheel-less platforms
+# (Termux/Android) it must build from sdist, and the isolated build
+# environment resolves under the same cutoff ("Failed to resolve
+# requirements from build-system.requires ... maturin>=1.9,<2").
+[tool.uv.exclude-newer-package]
+agent-client-protocol = false
+ai-edge-litert = false
+aiohttp = false
+aiohttp-socks = false
+aiosqlite = false
+alibabacloud-dingtalk = false
+anthropic = false
+asyncpg = false
+azure-identity = false
+boto3 = false
+brotlicffi = false
+certifi = false
+concurrent-log-handler = false
+croniter = false
+cryptography = false
+daytona = false
+debugpy = false
+defusedxml = false
+dingtalk-stream = false
+discord-py = false
+edge-tts = false
+elevenlabs = false
+exa-py = false
+fal-client = false
+fastapi = false
+faster-whisper = false
+fire = false
+firecrawl-anydoc = false
+firecrawl-py = false
+google-api-python-client = false
+google-auth = false
+google-auth-httplib2 = false
+google-auth-oauthlib = false
+google-cloud-pubsub = false
+h2 = false
+honcho-ai = false
+hindsight-all = false
+hindsight-api-slim = false
+hindsight-embed = false
+httplib2 = false
+httpx = false
+httpx2 = false
+huggingface_hub = false
+jinja2 = false
+langchain = false
+langchain-core = false
+langchain-openai = false
+langgraph = false
+lark-oapi = false
+markdown = false
+maturin = false
+mautrix = false
+mcp = false
+mem0ai = false
+microsoft-teams-apps = false
+mistralai = false
+modal = false
+nemo-relay = false
+numpy = false
+onnxruntime = false
+openai = false
+opentelemetry-exporter-otlp-proto-http = false
+opentelemetry-sdk = false
+openwakeword = false
+packaging = false
+parallel-web = false
+pathspec = false
+pillow = false
+prompt-toolkit = false
+psutil = false
+pvporcupine = false
+pyasn1 = false
+pydantic = false
+pyjwt = false
+pytest = false
+pytest-asyncio = false
+python-dotenv = false
+python-multipart = false
+python-olm = false
+python-telegram-bot = false
+pyyaml = false
+qrcode = false
+requests = false
+rich = false
+ruamel-yaml = false
+ruff = false
+sentencepiece = false
+setuptools = false
+setuptools-rust = false
+wheel = false
+sherpa-onnx = false
+slack-bolt = false
+slack-sdk = false
+snowballstemmer = false
+sounddevice = false
+starlette = false
+supermemory = false
+tenacity = false
+ty = false
+tzdata = false
+unpaddedbase64 = false
+uvicorn = false
+vercel = false
+websockets = false
+youtube-transcript-api = false
+
 
 [tool.setuptools]
 # Root single-file modules are derived by setup.py at build time from the

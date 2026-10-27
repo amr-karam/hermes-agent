@@ -1,14 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
-import {
-  AlertTriangle,
-  Check,
-  Copy,
-  Plus,
-  RotateCw,
-  Trash2,
-  Webhook,
-  X,
-} from "lucide-react";
+import { IconAlertTriangle as AlertTriangle, IconCheck as Check, IconCopy as Copy, IconPlus as Plus, IconRotateClockwise2 as RotateCw, IconTrash as Trash2, IconWebhook as Webhook, IconX as X } from "@tabler/icons-react";
 import { Badge } from "@nous-research/ui/ui/components/badge";
 import { Button } from "@nous-research/ui/ui/components/button";
 import { Select, SelectOption } from "@nous-research/ui/ui/components/select";

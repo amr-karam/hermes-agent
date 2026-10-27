@@ -792,13 +792,11 @@ from hermes_cli.web_routers import (
     skills as _skills_routes,
     tools as _tools_routes,
     analytics as _analytics_routes,
+    chat as _chat_routes,
     chat_ws as _chat_ws_routes,
     chat_workspaces as _chat_workspaces_routes,
     dashboard_ui as _dashboard_ui_routes,
-    webapp as _webapp_routes,
-    shared_metrics as _shared_metrics_routes,
-    delegation as _delegation_routes,
-    webapp_access as _webapp_access_routes,
+    rig as _rig_routes,
 )
 
 import hermes_cli.web_routers.uploads as _upload_routes
@@ -834,13 +832,11 @@ app.include_router(_profiles_routes.router)
 app.include_router(_skills_routes.router)
 app.include_router(_tools_routes.router)
 app.include_router(_analytics_routes.router)
+app.include_router(_chat_routes.router)
 app.include_router(_chat_ws_routes.router)
 app.include_router(_chat_workspaces_routes.router)
 app.include_router(_dashboard_ui_routes.router)
-app.include_router(_webapp_routes.router)
-app.include_router(_shared_metrics_routes.router)
-app.include_router(_delegation_routes.router)
-app.include_router(_webapp_access_routes.router, dependencies=[_Depends(_route_on("web_access"))])
+app.include_router(_rig_routes.router)
 
 # Plugin API routes and the dashboard auth routes (/login, /auth/*, /api/auth/*)
 # mount before the SPA catch-all so /{full_path:path} doesn't swallow them. Auth

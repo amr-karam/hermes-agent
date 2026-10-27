@@ -14,7 +14,10 @@
       // this, the first frame (which is what `ready-to-show` waits for) is the
       // UA-default white page, and the real theme only lands once the whole
       // module graph has executed — i.e. the "white flash" on every new
-      // window. applyTheme() in src/themes/context.tsx keeps these keys fresh.
+      // window. applyTheme() in src/themes/context.tsx keeps these keys fresh
+      // (per-profile keys `hermes-boot-background:<profile>` win here when the
+      // URL carries `?profile=`, so a relaunch of profile B never first-flashes
+      // profile A's background).
       //
       // OPAQUE WINDOWS ONLY. The `?win=` kinds Electron creates with
       // `transparent: true` already have a clear canvas, and pre-painting a
@@ -24,19 +27,26 @@
       // `secondary` (a session window) and `browser` are opaque and DO want the
       // pre-paint.
       try {
-        const win = new URLSearchParams(window.location.search).get('win')
-        if (!win || ['hud', 'overlay', 'quick', 'wake'].indexOf(win) === -1) {
-          let bg = localStorage.getItem('hermes-boot-background')
-          let scheme = localStorage.getItem('hermes-boot-color-scheme')
-          if (!bg) {
+        const params = new URLSearchParams(window.location.search)
+        const win = params.get('win')
+        if (!win || !['hud', 'overlay', 'quick', 'wake', 'intro'].includes(win)) {
+          // The per-profile background (written by applyTheme in
+          // src/themes/context.tsx) wins when the window was opened for a named
+          // profile; the global key stays the legacy single-profile slot.
+          const profile = params.get('profile')
+          const isHex = v => typeof v === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(v)
+          let bg = (profile && localStorage.getItem(`hermes-boot-background:${profile}`)) || localStorage.getItem('hermes-boot-background')
+          if (!isHex(bg)) {
             const dark = window.matchMedia('(prefers-color-scheme: dark)').matches
             bg = dark ? '#111111' : '#f7f7f7'
-            scheme = dark ? 'dark' : 'light'
           }
+          const scheme = (profile && localStorage.getItem(`hermes-boot-color-scheme:${profile}`)) || localStorage.getItem('hermes-boot-color-scheme')
           document.documentElement.style.backgroundColor = bg
           if (scheme === 'dark' || scheme === 'light') {
             document.documentElement.style.colorScheme = scheme
           }
+          const meta = document.querySelector('meta[name="theme-color"]')
+          if (meta) meta.setAttribute('content', bg)
         }
       } catch {
         // localStorage unavailable — keep UA defaults.

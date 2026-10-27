@@ -1,5 +1,5 @@
 import { Button } from "@nous-research/ui/ui/components/button";
-import { AlertTriangle } from "lucide-react";
+import { IconAlertTriangle as AlertTriangle } from "@tabler/icons-react";
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { cn, themedBody } from "@/lib/utils";

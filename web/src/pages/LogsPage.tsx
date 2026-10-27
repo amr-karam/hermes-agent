@@ -5,7 +5,7 @@ import {
   useCallback,
   useRef,
 } from "react";
-import { FileText, RefreshCw } from "lucide-react";
+import { IconFileText as FileText, IconRefresh as RefreshCw } from "@tabler/icons-react";
 import { useSearchParams } from "react-router";
 import { api } from "@/lib/api";
 import { Badge } from "@nous-research/ui/ui/components/badge";

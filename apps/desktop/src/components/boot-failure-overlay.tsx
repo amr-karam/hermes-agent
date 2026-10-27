@@ -16,6 +16,7 @@ import { DESKTOP_DOCS_URL } from '@/lib/docs'
 import { openExternalLink } from '@/lib/external-link'
 import { ChevronLeft, ExternalLink, FileText, Loader2, LogIn, RefreshCw, SlidersHorizontal, Wrench } from '@/lib/icons'
 import { $desktopBoot } from '@/store/boot'
+import { $firstRunInstallActive } from '@/store/first-run-install'
 import { notify, notifyError } from '@/store/notifications'
 import { $desktopOnboarding } from '@/store/onboarding'
 
@@ -122,6 +123,7 @@ function WebappSignInOverlay() {
 export function BootFailureOverlay() {
   const boot = useStore($desktopBoot)
   const onboarding = useStore($desktopOnboarding)
+  const firstRunInstall = useStore($firstRunInstallActive)
   const { t } = useI18n()
   const [busy, setBusy] = useState<BusyAction>(null)
   const [logs, setLogs] = useState<string[]>([])
@@ -143,11 +145,21 @@ export function BootFailureOverlay() {
   // can return, and a later clear or a different error shows the overlay again.
   const [dismissedError, setDismissedError] = useState<string | null>(null)
 
-  const visible = Boolean(boot.error) && boot.error !== dismissedError && !boot.running
+  const visible = Boolean(boot.error) && !boot.running
+
   // While first-run onboarding owns the picker/flow we let it surface its own
   // progress; the recovery overlay is for hard failures, which it covers via a
-  // higher z-index regardless of onboarding state.
-  const suppressed = onboarding.flow.status !== 'idle' && onboarding.flow.status !== 'error'
+  // higher z-index regardless of onboarding state. The first-run INSTALL surface
+  // is the same contract one rung over, and it is the one case where the
+  // "higher z-index" escape does not apply: DesktopInstallOverlay and this
+  // overlay both paint at z-(--z-setup), and wiring renders the install overlay
+  // FIRST (app/contrib/wiring.tsx), so a tie goes to whichever paints last —
+  // us. A boot failure raised while the install surface is up (a suspended-budget
+  // miss, a superseded attempt) would therefore cover the only UI that can settle
+  // the first run. The install surface has its own failure copy and repair
+  // actions; yield to it rather than out-rank it.
+  const suppressed =
+    (onboarding.flow.status !== 'idle' && onboarding.flow.status !== 'error') || firstRunInstall
 
   useEffect(() => {
     setDismissedError(current => (boot.running || current !== boot.error ? null : current))

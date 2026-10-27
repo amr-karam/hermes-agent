@@ -80,7 +80,14 @@ class CustomProfile(ProviderProfile):
                 # "none" / "default"; any graded level ("medium", "high") 400s (#75089).
                 top_level["reasoning_effort"] = "default"
             elif effort:
-                top_level["reasoning_effort"] = clamp_effort(effort, OPENAI_COMPAT_WIRE_EFFORTS)
+                # Clamp onto the endpoint's DECLARED vocabulary when the operator published one on
+                # the ``providers:`` entry (``reasoning_efforts:``) — a named relay may top out below
+                # the widest OpenAI-compat set and 400s the extra levels
+                # ("`reasoning_effort` must be one of `low`, `medium`, or `high`"). Undeclared keeps
+                # the widest set, which is the honest ceiling for an undiscoverable endpoint.
+                declared = ctx.get("reasoning_efforts")
+                supported = tuple(declared) if declared else OPENAI_COMPAT_WIRE_EFFORTS
+                top_level["reasoning_effort"] = clamp_effort(effort, supported)
         return extra_body, top_level
 
     def fetch_models(

@@ -1,4 +1,4 @@
-import { AlertTriangle, PowerOff, Radio, Wifi, WifiOff } from "lucide-react";
+import { IconAlertTriangle as AlertTriangle, IconPlugConnectedX as PowerOff, IconRadio as Radio, IconWifi as Wifi, IconWifiOff as WifiOff } from "@tabler/icons-react";
 import type { PlatformStatus } from "@/lib/api";
 import { isoTimeAgo } from "@/lib/utils";
 import { Badge } from "@nous-research/ui/ui/components/badge";

@@ -27,9 +27,29 @@ function productIdentity(source, stamp) {
   }).trim()
 }
 
-/** Every file bundleElectronMain writes: the only outputs that bake the install stamp. */
-export const electronOutputs = Object.freeze({
-  main: 'electron-main.mjs', preload: 'electron-preload.js', previewGuestPreload: 'preview-guest-preload.js',
+const external = ['electron', 'node-pty', 'get-windows', 'fs', 'dbus-native']
+// Production bundles bake packaged=true so unpackaged `electron .` still
+// behaves like a packaged build. Dev bundles (`--dev`) leave the env alone
+// so HERMES_DESKTOP_DEV_SERVER / source-tree resolution keep working.
+const isDev = process.argv.includes('--dev')
+const define = isDev
+  ? {}
+  : { 'process.env.HERMES_DESKTOP_IS_PACKAGED': JSON.stringify(true) }
+
+// Bundle main.ts → dist/electron-main.mjs
+await build({
+  entryPoints: [mainEntry],
+  bundle: true,
+  platform: 'node',
+  format: 'esm',
+  target: 'node20',
+  outfile: mainOut,
+  external,
+  banner: {
+    js: "import { createRequire } from 'module'; const require = createRequire(import.meta.url);",
+  },
+  define,
+  logLevel: 'info',
 })
 
 /** Bundle main/preload using only the prepared workspace's compiler. */

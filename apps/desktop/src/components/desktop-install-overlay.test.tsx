@@ -2,7 +2,8 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { DesktopBootstrapEvent, DesktopBootstrapState } from '@/global'
+import type { DesktopBootstrapEvent, DesktopBootstrapState, DesktopConnectionProbeResult } from '@/global'
+import { $firstRunInstallActive, firstRunInstallActive } from '@/store/first-run-install'
 
 import { DesktopInstallOverlay } from './desktop-install-overlay'
 
@@ -83,6 +84,7 @@ function whenPresent(text: string): Promise<HTMLElement> {
 
 beforeEach(() => {
   vi.restoreAllMocks()
+  $firstRunInstallActive.set(false)
 })
 
 afterEach(() => {
@@ -92,26 +94,26 @@ afterEach(() => {
 })
 
 describe('DesktopInstallOverlay first-run setup', () => {
-  it('shows the remote/local choice without installer progress', async () => {
-    installDesktopMock(
+  it('claims the screen while the choice is up and releases it on unmount', async () => {
+    // The boot recovery overlay and the boot wait's budget both read this claim.
+    // A stale one (a torn-down overlay that never cleared it) would suppress
+    // boot recovery forever.
+    const desktop = installDesktopMock(
       bootstrapState({
-        setupChoice: {
-          platform: 'win32',
-          activeRoot: 'C:\\Users\\me\\AppData\\Local\\hermes\\hermes-agent',
-          local: 'none',
-          bundled: false
-        }
+        setupChoice: { platform: 'win32', activeRoot: 'C:\\Users\\me\\AppData\\Local\\hermes\\hermes-agent' }
       })
     )
 
-    render(<DesktopInstallOverlay />)
+    const view = render(<DesktopInstallOverlay />)
 
-    expect(await screen.findByText('Set up Hermes Desktop')).toBeTruthy()
-    expect(screen.getByText('Connect to existing Hermes')).toBeTruthy()
-    expect(screen.getByText('Install Hermes locally')).toBeTruthy()
-    expect(screen.getByText(/Will install to/i)).toBeTruthy()
-    expect(screen.queryByText(/steps complete/i)).toBeNull()
-    expect(screen.queryByText(/Fetching installer manifest/i)).toBeNull()
+    await screen.findByText('Install Hermes locally')
+    // The claim is published from an effect, and the heading can paint a commit
+    // before passive effects flush — so wait for the claim rather than reading it
+    // in the same tick the text appears.
+    await waitFor(() => expect(firstRunInstallActive()).toBe(true))
+
+    view.unmount()
+    expect(firstRunInstallActive()).toBe(false)
   })
 
   it('continues local bootstrap only when Install Hermes locally is selected', async () => {

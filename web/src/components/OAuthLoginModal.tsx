@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ExternalLink, X, Check, Copy } from "lucide-react";
+import { IconExternalLink as ExternalLink, IconX as X, IconCheck as Check, IconCopy as Copy } from "@tabler/icons-react";
 import { Button } from "@nous-research/ui/ui/components/button";
 import { Spinner } from "@nous-research/ui/ui/components/spinner";
 import { H2 } from "@nous-research/ui/ui/components/typography/h2";

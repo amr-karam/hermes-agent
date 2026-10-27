@@ -61,15 +61,14 @@ const normalizeSkin = (name: string | null): string =>
   name && resolveTheme(name) && !RETIRED_SKINS.has(name) ? name : DEFAULT_SKIN_NAME
 
 /**
- * A stored mode, or `system` when there isn't one.
+ * A stored mode, or `dark` when there isn't one.
  *
- * A fresh profile follows the OS. Defaulting to `light` meant someone whose
- * desktop is dark got a white window on first launch and had to go find the
- * setting — and with per-appearance translucency it also handed them light's
- * much heavier tint, tuned for a bright desktop they don't have.
+ * Locking to dark mode by default respects AMOLED preferences and avoids
+ * the flash of a light window on first launch. Users can still switch to
+ * 'light' or 'system' in settings if they prefer.
  */
 const normalizeMode = (value: string | null): ThemeMode =>
-  value === 'light' || value === 'dark' || value === 'system' ? value : 'system'
+  value === 'light' || value === 'dark' || value === 'system' ? value : 'dark'
 
 // ─── Per-profile appearance persistence ─────────────────────────────────────
 // Skin and mode are each stored per profile. "default" isn't a real profile —
@@ -400,10 +399,26 @@ function applyTheme(theme: DesktopTheme, mode: 'light' | 'dark', chatFontFamily 
 
   // Raw (non-JSON) keys read by the inline pre-paint script in index.html —
   // they let a brand-new window paint the themed background on its very first
-  // frame, before this module has even loaded.
+  // frame, before this module has even loaded. The global key is the legacy
+  // single-profile slot and stays authoritative for windows that carry no
+  // `?profile=`; the per-profile keys exist so a window opened for profile B
+  // does not first-flash profile A's background (boot paint below resolves
+  // BOOT_PROFILE_KEY the same way).
   try {
+    const connectionProfile = normalizeProfileKey(
+      $connection.get()?.profile ?? ($connection.get() ? $activeGatewayProfile.get() : BOOT_PROFILE_KEY)
+    )
+
     window.localStorage.setItem('hermes-boot-background', chromeBg)
     window.localStorage.setItem('hermes-boot-color-scheme', rendered)
+
+    if (connectionProfile && connectionProfile !== 'default') {
+      window.localStorage.setItem(`hermes-boot-background:${connectionProfile}`, chromeBg)
+      window.localStorage.setItem(`hermes-boot-color-scheme:${connectionProfile}`, rendered)
+    } else {
+      window.localStorage.removeItem('hermes-boot-background:default')
+      window.localStorage.removeItem('hermes-boot-color-scheme:default')
+    }
   } catch {
     // Storage may be unavailable (private mode / quota); the inline script
     // falls back to prefers-color-scheme.

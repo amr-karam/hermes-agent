@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
-import { Palette, Check, Type } from "lucide-react";
+import { IconPalette as Palette, IconCheck as Check, IconTypography as Type } from "@tabler/icons-react";
 import { Button } from "@nous-research/ui/ui/components/button";
 import { ListItem } from "@nous-research/ui/ui/components/list-item";
 import { BottomSheet } from "@nous-research/ui/ui/components/bottom-sheet";
@@ -32,6 +32,15 @@ export function ThemeSwitcher({ collapsed = false, dropUp = false }: ThemeSwitch
   const dropdownRef = useRef<HTMLDivElement>(null);
   const narrowViewport = useBelowBreakpoint(640);
   const useMobileSheet = Boolean(dropUp && narrowViewport);
+  const [dropdownRect, setDropdownRect] = useState<DOMRect | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open || useMobileSheet) {
+      setDropdownRect(null);
+      return;
+    }
+    setDropdownRect(wrapperRef.current?.getBoundingClientRect() ?? null);
+  }, [open, useMobileSheet]);
 
   const close = useCallback(() => setOpen(false), []);
 
@@ -113,7 +122,7 @@ export function ThemeSwitcher({ collapsed = false, dropUp = false }: ThemeSwitch
       )}
 
       {open && !useMobileSheet && (() => {
-        const rect = wrapperRef.current?.getBoundingClientRect();
+        const rect = dropdownRect;
         const dropdown = (
           <div
             ref={dropdownRef}

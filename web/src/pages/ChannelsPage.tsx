@@ -1,20 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
-import {
-  AlertTriangle,
-  Bot,
-  Check,
-  CheckCircle2,
-  ExternalLink,
-  Info,
-  PlugZap,
-  QrCode,
-  Radio,
-  RotateCw,
-  Save,
-  Settings2,
-  WifiOff,
-  X,
-} from "lucide-react";
+import { IconAlertTriangle as AlertTriangle, IconRobot as Bot, IconCheck as Check, IconCircleCheck as CheckCircle2, IconExternalLink as ExternalLink, IconInfoCircle as Info, IconPlugConnected as PlugZap, IconQrcode as QrCode, IconRadio as Radio, IconRotateClockwise2 as RotateCw, IconDeviceFloppy as Save, IconAdjustments as Settings2, IconWifiOff as WifiOff, IconX as X } from "@tabler/icons-react";
 import * as QRCode from "qrcode";
 import { Badge } from "@nous-research/ui/ui/components/badge";
 import { Button } from "@nous-research/ui/ui/components/button";

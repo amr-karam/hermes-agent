@@ -1,4 +1,4 @@
-import { Users } from "lucide-react";
+import { IconUsers as Users } from "@tabler/icons-react";
 import { useProfileScope } from "@/contexts/useProfileScope";
 import { useI18n } from "@/i18n";
 

@@ -35,6 +35,7 @@ import { Card } from '@nous-research/ui/ui/components/card'
 import { ModelPickerDialog } from '@/components/ModelPickerDialog'
 import { ModelReloadConfirm } from '@/components/ModelReloadConfirm'
 import { ReasoningPicker } from '@/components/ReasoningPicker'
+import { SlashCommandPalette } from '@/components/SlashCommandPalette'
 import { GatewayClient, type ConnectionState } from '@/lib/gatewayClient'
 import { EventsFeedClient } from '@/lib/eventsFeedClient'
 import { api } from '@/lib/api'
@@ -53,8 +54,7 @@ import { credentialWarning, sidecarErrorMessage } from '@/lib/chat-sidebar-banne
 import { titleFromSessionInfoPayload } from '@/lib/chat-title'
 
 import { cn } from '@/lib/utils'
-import { AlertCircle, ChevronDown, KeyRound, RefreshCw } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { IconAlertCircle as AlertCircle, IconChevronDown as ChevronDown, IconKey as KeyRound, IconRefresh as RefreshCw, IconSearch as Search } from '@tabler/icons-react';import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 
 interface SessionInfo {
@@ -190,8 +190,8 @@ export function ChatSidebar({
   // Short name of a just-saved model awaiting confirm to reload (a fresh chat
   // session is how the running chat adopts it; we confirm before discarding it).
   const [pendingReloadModel, setPendingReloadModel] = useState<string | null>(null)
-  // Nous window plans, Large model: the backend's one-line warning for that switch (never a confirm).
-  const [switchNotice, setSwitchNotice] = useState<string | null>(null)
+  // Slash command palette visibility
+  const [paletteOpen, setPaletteOpen] = useState(false)
 
   const refreshEffectiveModel = useCallback(() => {
     void api
@@ -572,9 +572,21 @@ export function ChatSidebar({
           </Button>
         </div>
 
-        <Badge tone={STATE_TONE[state]} className="shrink-0">
-          {STATE_LABEL[state]}
-        </Badge>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <Button
+            ghost
+            size="icon"
+            onClick={() => setPaletteOpen(true)}
+            className="text-text-secondary hover:text-foreground"
+            title="Slash commands (/) — search and insert"
+            aria-label="Open slash command palette"
+          >
+            <Search className="h-3.5 w-3.5" />
+          </Button>
+          <Badge tone={STATE_TONE[state]} className="shrink-0">
+            {STATE_LABEL[state]}
+          </Badge>
+        </div>
       </Card>
 
       {supportsReasoning && (
@@ -694,6 +706,13 @@ export function ChatSidebar({
           )
         }}
       />
+
+      {paletteOpen && (
+        <SlashCommandPalette
+          profile={profile}
+          onClose={() => setPaletteOpen(false)}
+        />
+      )}
     </aside>
   )
 }

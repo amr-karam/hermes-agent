@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertTriangle, X } from "lucide-react";
+import { IconAlertTriangle as AlertTriangle, IconX as X } from "@tabler/icons-react";
 import type { StatusResponse } from "@/lib/api";
 import { useI18n } from "@/i18n";
 

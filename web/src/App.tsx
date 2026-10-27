@@ -20,47 +20,13 @@ import {
   useLocation,
   useNavigate,
 } from "react-router";
-import {
-  Activity,
-  BarChart3,
-  BookOpen,
-  Clock,
-  Code,
-  Cpu,
-  Database,
-  Download,
-  Eye,
-  FolderOpen,
-  FileText,
-  Globe,
-  Heart,
-  KeyRound,
-  Menu,
-  MessageSquare,
-  Package,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Plug,
-  Puzzle,
-  Radio,
-  RotateCw,
-  Settings,
-  Shield,
-  ShieldCheck,
-  Sparkles,
-  Star,
-  Terminal,
-  Users,
-  Webhook,
-  Wrench,
-  X,
-  Zap,
-} from "lucide-react";
+import { IconChartBar as BarChart3, IconBook as BookOpen, IconClock as Clock, IconCpu as Cpu, IconDownload as Download, IconFolderOpen as FolderOpen, IconFileText as FileText, IconKey as KeyRound, IconMenu2 as Menu, IconMessage as MessageSquare, IconPackage as Package, IconLayoutSidebarLeftCollapse as PanelLeftClose, IconLayoutSidebarLeftExpand as PanelLeftOpen, IconPlug as Plug, IconPuzzle as Puzzle, IconRadio as Radio, IconRotateClockwise2 as RotateCw, IconSettings as Settings, IconShieldCheck as ShieldCheck, IconTerminal2 as Terminal, IconUsers as Users, IconWebhook as Webhook, IconTool as Wrench, IconX as X } from "@tabler/icons-react";
 import { Button } from "@nous-research/ui/ui/components/button";
 import { SelectionSwitcher } from "@nous-research/ui/ui/components/selection-switcher";
 import { Spinner } from "@nous-research/ui/ui/components/spinner";
 import { Typography } from "@nous-research/ui/ui/components/typography/index";
 import { ConfirmDialog } from "@nous-research/ui/ui/components/confirm-dialog";
+import { resolvePluginIcon } from "@/lib/plugin-icons";
 import { cn } from "@/lib/utils";
 import { SidebarFooter } from "@/components/SidebarFooter";
 import { SidebarStatusStrip, gatewayLine } from "@/components/SidebarStatusStrip";
@@ -97,6 +63,7 @@ const ChannelsPage = lazy(() => import("@/pages/ChannelsPage"));
 const WebhooksPage = lazy(() => import("@/pages/WebhooksPage"));
 const SystemPage = lazy(() => import("@/pages/SystemPage"));
 const ChatPage = lazy(() => import("@/pages/ChatPage"));
+const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { useI18n } from "@/i18n";
@@ -175,6 +142,7 @@ const BUILTIN_ROUTES_CORE: Record<string, ComponentType> = {
   "/config": ConfigPage,
   "/env": EnvPage,
   "/docs": DocsPage,
+  "/dashboard": DashboardPage,
 };
 
 // Route placeholder for /chat.  The persistent ChatPage host (rendered
@@ -211,6 +179,7 @@ const BUILTIN_NAV_REST: NavItem[] = [
   { path: "/plugins", labelKey: "plugins", label: "Plugins", icon: Puzzle },
   { path: "/mcp", label: "MCP", icon: Plug },
   { path: "/channels", label: "Channels", icon: Radio },
+  { path: "/dashboard", label: "Dashboard", icon: Cpu },
   { path: "/webhooks", label: "Webhooks", icon: Webhook },
   { path: "/pairing", label: "Pairing", icon: ShieldCheck },
   { path: "/profiles", labelKey: "profiles", label: "Profiles", icon: Users },
@@ -225,34 +194,8 @@ const BUILTIN_NAV_REST: NavItem[] = [
   },
 ];
 
-const ICON_MAP: Record<string, ComponentType<{ className?: string }>> = {
-  Activity,
-  BarChart3,
-  Clock,
-  Cpu,
-  FileText,
-  FolderOpen,
-  KeyRound,
-  MessageSquare,
-  Package,
-  Settings,
-  Puzzle,
-  Sparkles,
-  Terminal,
-  Globe,
-  Database,
-  Shield,
-  Users,
-  Wrench,
-  Zap,
-  Heart,
-  Star,
-  Code,
-  Eye,
-};
-
 function resolveIcon(name: string): ComponentType<{ className?: string }> {
-  return ICON_MAP[name] ?? Puzzle;
+  return resolvePluginIcon(name);
 }
 
 function buildNavItems(

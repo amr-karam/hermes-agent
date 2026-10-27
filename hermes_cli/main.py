@@ -349,6 +349,8 @@ from hermes_cli.subcommands.gateway import build_gateway_parser
 from hermes_cli.subcommands.profile import build_profile_parser
 from hermes_cli.subcommands.model import build_model_parser
 from hermes_cli.subcommands.setup import build_setup_parser
+from hermes_cli.subcommands.rig import build_rig_parser
+from hermes_cli.subcommands.rig import build_rig_parser
 
 from hermes_cli.subcommands.whatsapp import build_whatsapp_parser, build_whatsapp_cloud_parser
 from hermes_cli.subcommands.slack import build_slack_parser
@@ -2757,26 +2759,27 @@ def cmd_console(args):
 # _build_cli_parser: a missing entry only costs a one-time discovery; an extra
 # entry would let a plugin command silently fail to parse.
 _BUILTIN_SUBCOMMANDS = frozenset(
-    {
-        "acp", "approvals", "auth", "backup", "bundles", "checkpoints", "codex-runtime", "completion",
-        "computer-use", "connectors",
-        "config", "console", "cron", "curator", "dashboard", "serve", "debug", "doctor",
-        "dump", "egress", "fallback", "gateway", "hooks", "import", "insights",
-        "gui", "desktop", "kanban", "login", "logout", "logs", "lsp", "mcp", "memory", "migrate", "moa",
-        "journey", "memory-graph", "learning",
-        "model", "monitoring", "pairing", "pause", "peer", "pets", "plugins", "portal", "profile",
-        "project", "proxy",
-        "prompt-size",
-        "resume",
-        "send", "sessions", "setup",
-        "skin", "skills", "slack", "status", "tools", "uninstall", "update",
-        "usage", "vault",
-        "webhook", "whatsapp", "whatsapp-cloud", "worktree", "chat", "secrets", "security",
-        "browser",
-        "verify",
-        # Plugin commands missing from top-level --help is an accepted trade-off.
-        "help",
-    }
+     {
+         "acp", "approvals", "auth", "backup", "bundles", "checkpoints", "claw", "codex-runtime", "completion",
+         "computer-use",
+         "config", "console", "cron", "curator", "dashboard", "serve", "debug", "doctor",
+         "dump", "egress", "fallback", "gateway", "hooks", "import", "import-agent", "insights",
+         "gui", "desktop", "kanban", "login", "logout", "logs", "lsp", "mcp", "memory", "migrate", "moa",
+         "journey", "memory-graph", "learning",
+         "model", "monitoring", "pairing", "pause", "peer", "pets", "plugins", "portal", "profile",
+         "project", "proxy",
+         "prompt-size",
+         "resume",
+         "send", "sessions", "setup",
+         "skin", "skills", "slack", "status", "sync", "tools", "uninstall", "update",
+         "usage", "vault",
+         "webhook", "whatsapp", "whatsapp-cloud", "worktree", "chat", "secrets", "security",
+         "browser",
+         "verify",
+         "rig",
+         # Plugin commands missing from top-level --help is an accepted trade-off.
+         "help",
+     }
 )
 
 
@@ -3359,6 +3362,7 @@ def _build_cli_parser():
     build_skills_parser(subparsers, cmd_skills=cmd_skills)
     build_bundles_parser(subparsers)
     build_plugins_parser(subparsers, cmd_plugins=cmd_plugins)
+    build_rig_parser(subparsers)
 
     _register_plugin_cli_commands(subparsers)
 

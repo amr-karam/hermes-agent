@@ -1,18 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import {
-  Brain,
-  ChevronDown,
-  Cpu,
-  DollarSign,
-  Eye,
-  RefreshCw,
-  Settings2,
-  Star,
-  Wrench,
-  X,
-  Zap,
-} from "lucide-react";
+import { IconBrain as Brain, IconChevronDown as ChevronDown, IconCpu as Cpu, IconCurrencyDollar as DollarSign, IconEye as Eye, IconRefresh as RefreshCw, IconAdjustments as Settings2, IconStar as Star, IconTool as Wrench, IconX as X, IconBolt as Zap } from "@tabler/icons-react";
 import { api } from "@/lib/api";
 import { auxTaskLabel, auxTaskRows } from "@/lib/aux-tasks";
 import type {

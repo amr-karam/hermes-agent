@@ -21,11 +21,14 @@
 import { Button } from "@nous-research/ui/ui/components/button";
 import { ListItem } from "@nous-research/ui/ui/components/list-item";
 import { Spinner } from "@nous-research/ui/ui/components/spinner";
-import { AlertCircle, MessageSquarePlus, RefreshCw } from "lucide-react";
+import { IconAlertCircle as AlertCircle, IconMessagePlus as MessageSquarePlus, IconRefresh as RefreshCw } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 
 import { ChatWorkspacePicker } from "@/components/ChatWorkspacePicker";
+import { FilterChips, type SessionFilters } from "@/components/FilterChips";
+import { SessionPreviewPopover } from "@/components/SessionPreviewPopover";
+import { SessionSearchInput } from "@/components/SessionSearchInput";
 import { useI18n } from "@/i18n";
 import { api, type SessionInfo } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
@@ -78,32 +81,85 @@ export function ChatSessionList({
   onWorkspaceChange,
 }: ChatSessionListProps) {
   const { t } = useI18n();
-  const [, setSearchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [sessions, setSessions] = useState<SessionInfo[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Bumped to force a refetch (after switching, on Refresh, on mount).
+  const [total, setTotal] = useState(0);
   const [reloadNonce, setReloadNonce] = useState(0);
 
-  // `profile` is read inside the fetch; it's part of the scope key so a
-  // profile switch refetches. The empty-string fallback keeps the dep
-  // stable when no profile is selected (default profile).
+  // Search and filters state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filters, setFilters] = useState<SessionFilters>({});
+  const [searchDebounced, setSearchDebounced] = useState("");
+
+  // Sync URL params to state on mount/profile change
   const scopeKey = profile ?? "";
 
-  // Monotonic request token: only the most recent fetch is allowed to
-  // commit state, so a fast profile switch (or Refresh spam) can't land a
-  // stale list out of order.
+  useEffect(() => {
+    setSearchQuery(searchParams.get("search") || "");
+    setFilters({
+      source: searchParams.get("source") || undefined,
+      after: searchParams.get("after") || undefined,
+      before: searchParams.get("before") || undefined,
+      minMessages: searchParams.get("min_messages") ? Number(searchParams.get("min_messages")) : undefined,
+    });
+  }, [searchParams, scopeKey]);
+
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchDebounced(searchQuery);
+      setReloadNonce(n => n + 1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // URL update helper
+  const updateUrl = useCallback((key: string, value: string | null) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value) next.set(key, value);
+      else next.delete(key);
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
+
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchQuery(value);
+  }, []);
+
+  const handleSearchClear = useCallback(() => {
+    setSearchQuery("");
+    updateUrl("search", null);
+  }, [updateUrl]);
+
+  const handleFilterChange = useCallback((newFilters: SessionFilters) => {
+    setFilters(newFilters);
+  }, []);
+
+  // Monotonic request token
   const reqRef = useRef(0);
 
   const load = useCallback(() => {
     const myReq = ++reqRef.current;
     setLoading(true);
     setError(null);
+
+    const sourceList = filters.source ? [filters.source] : undefined;
+
     api
-      .getSessions(SESSION_LIMIT, 0, scopeKey, "recent")
+      .getSessions(SESSION_LIMIT, 0, {
+        ...(scopeKey ? { profile: scopeKey } : {}),
+        order: "recent",
+        source: filters.source,
+        sources: sourceList,
+        search: searchDebounced || undefined,
+      })
       .then((res) => {
         if (reqRef.current !== myReq) return;
         setSessions(res.sessions);
+        setTotal(res.total);
       })
       .catch((e: Error) => {
         if (reqRef.current !== myReq) return;
@@ -112,19 +168,13 @@ export function ChatSessionList({
       .finally(() => {
         if (reqRef.current === myReq) setLoading(false);
       });
-  }, [scopeKey]);
+  }, [scopeKey, filters, searchDebounced]);
 
   const reload = useCallback(() => setReloadNonce((n) => n + 1), []);
 
   useEffect(() => {
-    if (!isActive) return;
-    // Dashboard data surfaces fetch from an effect on mount + scope change;
-    // keep this local and explicit until the shared lint profile is updated
-    // for async loaders (matches FilesPage).
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
-    // `reloadNonce` is a manual refetch trigger (Refresh button / row pick).
-  }, [isActive, load, reloadNonce]);
+  }, [load, reloadNonce]);
 
   useEffect(() => {
     if (!isActive) return;
@@ -211,42 +261,48 @@ export function ChatSessionList({
         {sessions.map((s) => {
           const isActive = s.id === activeSessionId;
           return (
-            <ListItem
-              key={s.id}
-              onClick={() => pick(s.id)}
-              aria-current={isActive ? "true" : undefined}
-              className={cn(
-                "flex-col items-start gap-0.5 rounded px-2 py-1.5",
-                "normal-case tracking-normal",
-                isActive
-                  ? "bg-primary/10 text-foreground border-l-2 border-primary"
-                  : "text-text-secondary hover:bg-midground/5 hover:text-foreground",
-              )}
-            >
-              <span className="w-full truncate text-sm font-medium">
-                {rowLabel(s, t.sessions.untitledSession)}
-              </span>
-              <span className="flex w-full items-center gap-1.5 text-[0.6875rem] text-text-tertiary">
-                <span>{timeAgo(s.last_active)}</span>
-                {s.message_count > 0 && (
-                  <>
-                    <span aria-hidden>·</span>
-                    <span>{s.message_count} msgs</span>
-                  </>
+            <SessionPreviewPopover key={s.id} sessionId={s.id} profile={profile} limit={5}>
+              <ListItem
+                onClick={() => pick(s.id)}
+                aria-current={isActive ? "true" : undefined}
+                className={cn(
+                  "flex-col items-start gap-0.5 rounded px-2 py-1.5",
+                  "normal-case tracking-normal",
+                  isActive
+                    ? "bg-primary/10 text-foreground border-l-2 border-primary"
+                    : "text-text-secondary hover:bg-midground/5 hover:text-foreground",
                 )}
-                {s.source && s.source !== "cli" && (
-                  <>
-                    <span aria-hidden>·</span>
-                    <span className="truncate">{s.source}</span>
-                  </>
-                )}
-              </span>
-            </ListItem>
+              >
+                <span className="w-full truncate text-sm font-medium">
+                  {rowLabel(s, t.sessions.untitledSession)}
+                </span>
+                <span className="flex w-full items-center gap-1.5 text-[0.6875rem] text-text-tertiary">
+                  <span>{timeAgo(s.last_active)}</span>
+                  {s.message_count > 0 && (
+                    <>
+                      <span aria-hidden>·</span>
+                      <span>{s.message_count} msgs</span>
+                    </>
+                  )}
+                  {s.source && s.source !== "cli" && (
+                    <>
+                      <span aria-hidden>·</span>
+                      <span className="truncate">{s.source}</span>
+                    </>
+                  )}
+                </span>
+              </ListItem>
+            </SessionPreviewPopover>
           );
         })}
+        {total > sessions.length && (
+          <div className="px-2 py-2 text-center text-xs text-text-tertiary border-t border-border">
+            {t.sessions.showingOf(sessions.length, total)}
+          </div>
+        )}
       </div>
     );
-  }, [activeSessionId, error, loading, pick, reload, sessions, t]);
+  }, [activeSessionId, error, loading, pick, reload, sessions, total, t, profile]);
 
   return (
     <aside
@@ -278,6 +334,19 @@ export function ChatSessionList({
           onChange={onWorkspaceChange}
         />
       )}
+
+      <SessionSearchInput
+        value={searchQuery}
+        onChange={handleSearchChange}
+        onClear={handleSearchClear}
+        placeholder={t.sessions.searchPlaceholder}
+      />
+
+      <FilterChips
+        filters={filters}
+        onChange={handleFilterChange}
+        onUpdateUrl={updateUrl}
+      />
 
       <Button
         outlined

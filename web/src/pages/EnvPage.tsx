@@ -1,20 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
-import {
-  Eye,
-  EyeOff,
-  ExternalLink,
-  KeyRound,
-  MessageSquare,
-  Pencil,
-  Plus,
-  Save,
-  Settings,
-  Trash2,
-  X,
-  Zap,
-  ChevronDown,
-  ChevronRight,
-} from "lucide-react";
+import { IconEye as Eye, IconEyeOff as EyeOff, IconExternalLink as ExternalLink, IconKey as KeyRound, IconMessage as MessageSquare, IconPencil as Pencil, IconPlus as Plus, IconDeviceFloppy as Save, IconSettings as Settings, IconTrash as Trash2, IconX as X, IconBolt as Zap, IconChevronDown as ChevronDown, IconChevronRight as ChevronRight } from "@tabler/icons-react";
 import { api } from "@/lib/api";
 import type { EnvVarInfo } from "@/lib/api";
 import { removeDeletedEnvVarFromState } from "@/lib/env-state";

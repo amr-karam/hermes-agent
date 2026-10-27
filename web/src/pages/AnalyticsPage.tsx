@@ -1,14 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
-import {
-  ArrowDown,
-  ArrowUp,
-  ArrowUpDown,
-  BarChart3,
-  Brain,
-  Cpu,
-  RefreshCw,
-  TrendingUp,
-} from "lucide-react";
+import { IconArrowDown as ArrowDown, IconArrowUp as ArrowUp, IconArrowsUpDown as ArrowUpDown, IconChartBar as BarChart3, IconBrain as Brain, IconCpu as Cpu, IconRefresh as RefreshCw, IconTrendingUp as TrendingUp } from "@tabler/icons-react";
 import { api } from "@/lib/api";
 import type {
   AnalyticsResponse,

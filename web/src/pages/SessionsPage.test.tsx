@@ -3,6 +3,16 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+// SessionsPage and its providers are imported statically on purpose. A dynamic
+// import() inside renderSessionsPage() charged the cold transform/eval of this
+// page's whole module graph to whichever test ran first, which pushed it past
+// the 15s per-test timeout on a loaded machine. vi.mock() is hoisted above
+// these imports, so the mocks further down still apply to them.
+import SessionsPage from "./SessionsPage";
+import { I18nProvider } from "@/i18n";
+import { SystemActionsProvider } from "@/contexts/SystemActions";
+import { ProfileProvider } from "@/contexts/ProfileProvider";
+import { PageHeaderProvider } from "@/contexts/PageHeaderProvider";
 
 const apiMocks = vi.hoisted(() => ({
   getSessions: vi.fn(),
@@ -39,14 +49,14 @@ let container: HTMLDivElement;
 let root: Root;
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-async function waitFor(cond: () => boolean, timeoutMs = 5000) {
-  const start = Date.now();
-  while (!cond()) {
-    if (Date.now() - start > timeoutMs) throw new Error("waitFor: condition never became true");
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    });
-  }
+/** Wait for an observation to become true. Polled via `vi.waitFor`, which
+ * flushes pending effects without wrapping every poll tick in `act()` — that
+ * wrapping is what produced the overlapping-act warnings and the 5s minimum
+ * latency of the hand-rolled `setTimeout(20)` loop. `act()` is used only
+ * around event dispatches below. Timeout set to 15s to match the file's
+ * per-test timeout rather than Vitest's 1s default. */
+async function waitFor(cond: () => boolean) {
+  await vi.waitFor(cond, { timeout: 15000 });
 }
 
 function click(el: Element | null) {
@@ -65,14 +75,6 @@ async function renderSessionsPage(rows: Record<string, unknown>[]) {
     limit,
     offset: 0,
   }));
-  const [{ default: SessionsPage }, { I18nProvider }, { SystemActionsProvider }, { ProfileProvider }, { PageHeaderProvider }] =
-    await Promise.all([
-      import("./SessionsPage"),
-      import("@/i18n"),
-      import("@/contexts/SystemActions"),
-      import("@/contexts/ProfileProvider"),
-      import("@/contexts/PageHeaderProvider"),
-    ]);
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -179,7 +181,7 @@ describe("SessionsPage per-row profile routing (#99387)", () => {
     });
     await waitFor(() => document.body.textContent?.includes("Search hit") === true);
 
-    await act(async () => click(button("Delete session")));
+    await act(async () => click(button("Delete session")!.closest("div.cursor-pointer")));
     await waitFor(() => Boolean(document.querySelector('[role="alertdialog"]')));
     const confirm = Array.from(document.querySelectorAll('[role="alertdialog"] button')).find(
       (b) => b.textContent?.trim() === "Delete",

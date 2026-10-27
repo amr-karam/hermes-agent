@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Users } from "lucide-react";
+import { IconUsers as Users } from "@tabler/icons-react";
 import {
   Select,
   SelectOption,

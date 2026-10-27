@@ -1,4 +1,4 @@
-import { AlertCircle, RotateCcw } from "lucide-react";
+import { IconAlertCircle as AlertCircle, IconRotateClockwise as RotateCcw } from "@tabler/icons-react";
 import { Button } from "@nous-research/ui/ui/components/button";
 import { Card } from "@nous-research/ui/ui/components/card";
 

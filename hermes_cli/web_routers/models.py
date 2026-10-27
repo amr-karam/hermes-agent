@@ -425,3 +425,66 @@ async def set_model_assignment(body: ModelAssignment, profile: Optional[str] = N
                         reasoning_effort=reasoning_effort, prepared=prepared)
 
         return await asyncio.to_thread(_apply_assignment)
+
+
+@router.get("/api/model/health")
+async def get_model_health(profile: Optional[str] = None):
+    """Per-provider reachability signal for the model picker.
+
+    P2 dashboard enhancement (T4): a 🟢/🟡/🔴 badge beside each provider row so
+    users can tell, at a glance, which providers are ready to use. This is a
+    *read-only, non-blocking* snapshot — it never runs a live models.dev probe
+    (that path is ``/api/model/options`` with ``refresh=1``), so it cannot stall
+    the picker or the chat sidebar. Reachability is derived from the same
+    inventory the picker builds:
+
+      * 🟢 authenticated — the provider has a credential and its curated catalog
+        is resident (the row ``/api/model/options`` would return).
+      * 🟡 configured but unverified — a saved custom endpoint whose ``/models``
+        probe has not run (the picker probes those lazily).
+      * 🔴 not configured — no credential; selecting it would prompt for a key.
+
+    ``checked_at`` is the server's monotonic clock so callers can cache the
+    payload briefly without re-hitting on every render.
+    """
+    import time as _time
+
+    def _build():
+        with _profile_scope(profile):
+            ctx_payload = build_model_options_payload(
+                load_picker_context(), explicit_only=False, include_unconfigured=True,
+                refresh=False, non_blocking_catalogs=True)
+        rows = ctx_payload.get("providers") or []
+        out = []
+        for row in rows:
+            slug = str(row.get("slug") or row.get("id") or "").strip()
+            if not slug:
+                continue
+            is_current = bool(row.get("is_current"))
+            is_user_defined = bool(row.get("is_user_defined"))
+            models = row.get("models") or []
+            # A custom endpoint is "configured but unverified" until the picker
+            # has probed its /models; built-ins with a credential are live.
+            if slug == "custom" or (is_user_defined and not models):
+                tone = "yellow"
+            elif models or is_current:
+                tone = "green"
+            else:
+                tone = "red"
+            out.append({
+                "slug": slug,
+                "name": str(row.get("name") or slug),
+                "tone": tone,
+                "is_current": is_current,
+                "model_count": len(models),
+                "checked_at": _time.time(),
+            })
+        return {"providers": out, "count": len(out)}
+
+    try:
+        return await run_in_threadpool(_build)
+    except HTTPException:
+        raise
+    except Exception:
+        _log.exception("GET /api/model/health failed")
+        raise HTTPException(status_code=500, detail="Failed to compute provider health")

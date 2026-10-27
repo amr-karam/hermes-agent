@@ -21,7 +21,7 @@ import threading
 import time
 import uuid
 from types import SimpleNamespace
-from typing import Any, Callable, Dict, List, NamedTuple, Optional, Tuple, TYPE_CHECKING, Union
+from typing import Any, Callable, Dict, List, NamedTuple, Optional, Sequence, Tuple, TYPE_CHECKING, Union
 from urllib.parse import urlparse, parse_qs, urlunparse
 
 from agent.local_prompt_progress import (
@@ -35,7 +35,8 @@ from agent.error_classifier import (
 )
 from agent.auxiliary_managed_local import _is_managed_local_endpoint
 from agent.auxiliary_reasoning_floor import remember_reasoning_floor, with_reasoning_floor
-from agent.auxiliary_structured_output import _route_key, _without_structured_output_format, remember_structured_output_rejection
+from agent.auxiliary_reasoning_vocabulary import declared_reasoning_efforts
+from agent.auxiliary_structured_output import remember_structured_output_rejection
 from agent.codex_headers import (
     CODEX_AUX_BASE_URL as _CODEX_AUX_BASE_URL,
     apply_required_codex_headers as _apply_required_codex_headers,
@@ -4340,8 +4341,14 @@ def _try_main_agent_model_fallback(
 # it). This preserves the existing fallback surface for unrecognised/custom models while closing the gap on
 # the well-known ones.
 def _task_minimum_context_length(task: Optional[str]) -> Optional[int]:
-    """Minimum context length for an auxiliary task; None = no floor (only ``compression`` has one)."""
-    return MINIMUM_CONTEXT_LENGTH if task == "compression" else None
+    """Minimum context length for an auxiliary task; compression only.
+
+    256 tokens: enough for a one-sentence summary. Models below this are
+    genuinely unusable for compression. Above this, the existing
+    threshold-clamping handles the rest — _lower_threshold_to_aux_context
+    and _compute_threshold_tokens both support small windows.
+    """
+    return 256 if task == "compression" else None
 
 
 def _candidate_context_window(provider: str, model: str, base_url: str = "", api_key: str = "") -> Optional[int]:
@@ -6619,12 +6626,17 @@ def _routes_to_custom_endpoint(provider_norm: str) -> bool:
 
 
 def _project_provider_profile(
-    provider: str, provider_norm: str, model: str, effective_base: str, reasoning_config: Optional[dict], data_use: frozenset[str],
+    provider: str, provider_norm: str, model: str, effective_base: str, reasoning_config: Optional[dict],
+    reasoning_efforts: Optional[Sequence[str]] = None,
 ) -> _ProfileProjection:
-    """Provider profile's extra_body / kwargs projection; partial on failure."""
-    body: dict[str, Any] = {}
-    reasoning_extra: dict[str, Any] = {}
-    top_level: dict[str, Any] = {}
+    """Provider profile's extra_body / kwargs projection; partial on failure.
+
+    ``reasoning_efforts`` (the endpoint's declared vocabulary) reaches the profile so it can clamp
+    the effort before the request instead of learning the ceiling from a 400.
+    """
+    body: Dict[str, Any] = {}
+    reasoning_extra: Dict[str, Any] = {}
+    top_level: Dict[str, Any] = {}
     handles_reasoning = False
     messages_wire = False
     try:
@@ -6644,6 +6656,7 @@ def _project_provider_profile(
             reasoning_extra, top_level = profile.build_api_kwargs_extras(
                 reasoning_config=reasoning_config, supports_reasoning=reasoning_config is not None,
                 model=model, base_url=effective_base,
+                reasoning_efforts=tuple(reasoning_efforts or ()),
             )
             reasoning_extra = reasoning_extra or {}
             top_level = top_level or {}
@@ -6754,8 +6767,12 @@ def _build_call_kwargs(
             extra_body.pop("reasoning")
             if reasoning_config is None:
                 reasoning_config = task_reasoning
-    reasoning_config = clamp_reasoning_config(known_reasoning_floor(reasoning_config, provider_norm, effective_base, model, task))
-    projection = _project_provider_profile(provider, provider_norm, model, effective_base, reasoning_config, data_use_requirement(messages))
+    reasoning_config = clamp_reasoning_config(
+        known_reasoning_floor(reasoning_config, provider_norm, effective_base, model, task))
+    projection = _project_provider_profile(
+        provider, provider_norm, model, effective_base, reasoning_config,
+        reasoning_efforts=declared_reasoning_efforts(provider_norm, effective_base),
+    )
     kwargs.update(projection.top_level)
     merged_extra = _merge_aux_extra_body(extra_body, projection, reasoning_config, provider_norm)
     if "response_format" in merged_extra:

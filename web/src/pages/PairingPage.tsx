@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
-import { Check, ShieldCheck, Trash2, Users, X } from "lucide-react";
+import { IconCheck as Check, IconShieldCheck as ShieldCheck, IconTrash as Trash2, IconUsers as Users, IconX as X } from "@tabler/icons-react";
 import { Badge } from "@nous-research/ui/ui/components/badge";
 import { Button } from "@nous-research/ui/ui/components/button";
 import { Spinner } from "@nous-research/ui/ui/components/spinner";

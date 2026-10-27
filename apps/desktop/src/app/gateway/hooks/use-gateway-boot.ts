@@ -23,8 +23,13 @@ import {
   LIVENESS_REPROBE_DELAY_MS
 } from '@/lib/gateway-liveness-policy'
 import { resolveDesktopGatewayWsUrl } from '@/lib/gateway-ws-url'
-import { browserLaunchProfile, isBrowserHostedDesktop } from '@/lib/platform'
-import { BACKEND_BOOT_WAIT_TIMEOUT_MS, RECONNECT_ATTEMPT_TIMEOUT_MS, withTimeout } from '@/lib/with-timeout'
+import {
+  BACKEND_BOOT_WAIT_TIMEOUT_MS,
+  FIRST_RUN_INSTALL_STALL_CEILING_MS,
+  RECONNECT_ATTEMPT_TIMEOUT_MS,
+  withSuspendedTimeout,
+  withTimeout
+} from '@/lib/with-timeout'
 import {
   $desktopBoot,
   applyDesktopBootProgress,
@@ -35,7 +40,7 @@ import {
   setDesktopBootStep
 } from '@/store/boot'
 import { resetBackgroundPollingGuard } from '@/store/composer-status'
-import { noteBackendDrop, noteBackendExited } from '@/store/desktop-metrics'
+import { firstRunInstallActivity } from '@/store/first-run-install'
 import {
   $gateway,
   activeGateway,
@@ -1505,10 +1510,30 @@ export function useGatewayBoot({
         // round-trip must not hang "Starting Hermes…" forever. Initial boot
         // rides out a full backend cold spawn, so it gets the shared 45s
         // backend-boot budget, not the 20s reconnect budget.
-        const conn = await withTimeout(
+        //
+        // A FIRST RUN is paced by neither: main parks on the setup choice until
+        // the user answers, then installs (a cold products build is minutes —
+        // a measured first launch ran 32 min before this wait killed it). The
+        // budget is charged only for time the install surface does NOT own, and
+        // the ceiling bounds installer SILENCE rather than elapsed time, so a
+        // long-but-alive install survives while a wedged one still ends in the
+        // recovery overlay instead of hanging "Starting Hermes…" forever.
+        // Neither can be a fixed total: the manifest's `needs_user_input`
+        // stages are paced by a person, so awaitingUser suspends the ceiling.
+        const conn = await withSuspendedTimeout(
           getWindowBackend(true),
           BACKEND_BOOT_WAIT_TIMEOUT_MS,
-          'Timed out connecting to Hermes backend'
+          'Timed out connecting to Hermes backend',
+          () => {
+            const install = firstRunInstallActivity()
+
+            return {
+              suspended: install.active,
+              awaitingUser: install.awaitingUser,
+              idleForMs: install.idleForMs
+            }
+          },
+          FIRST_RUN_INSTALL_STALL_CEILING_MS
         )
 
         if (cancelled) {

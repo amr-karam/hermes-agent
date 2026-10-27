@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { en } from '@/i18n/en'
 import { WEBAPP_LAUNCH_REQUIRED } from '@/lib/browser-launch-session'
 import { $desktopBoot } from '@/store/boot'
-import { $notifications } from '@/store/notifications'
+import { $firstRunInstallActive } from '@/store/first-run-install'
 import { $desktopOnboarding } from '@/store/onboarding'
 
 import { BootFailureOverlay, StartupOverlay } from './boot-failure-overlay'
@@ -67,6 +67,7 @@ const remoteToken = {
 }
 
 beforeEach(() => {
+  $firstRunInstallActive.set(false)
   $desktopOnboarding.set({
     configured: true,
     flow: { status: 'idle' },
@@ -292,43 +293,22 @@ describe('BootFailureOverlay', () => {
     }
   })
 
-  it('asks a signed-out Webapp tab to sign in instead of offering recovery for a working service', async () => {
-    const restore = stubDesktop({ mode: 'local' })
-    $desktopBoot.set({
-      error: WEBAPP_LAUNCH_REQUIRED,
-      fakeMode: false,
-      message: 'boot failed',
-      phase: 'renderer.error',
-      progress: 40,
-      running: false,
-      timestamp: Date.now(),
-      visible: true
-    })
+  it('yields to the first-run install surface instead of covering the setup choice', () => {
+    // Both surfaces paint on the same z-index rung and this one mounts later,
+    // so a boot failure raised while the first run is up would cover the only UI
+    // that can answer it — leaving the run unsettleable until restart.
+    $firstRunInstallActive.set(true)
 
-    try {
-      render(<StartupOverlay />)
-      expect(await screen.findByText(en.boot.failure.webappTitle)).toBeTruthy()
-      expect(screen.getByText(en.boot.failure.webappDescription)).toBeTruthy()
-      expect(screen.queryByText(en.boot.failure.title)).toBeNull()
-      expect(screen.queryByRole('button', { name: /retry/i })).toBeNull()
-      expect(screen.queryByRole('button', { name: /repair/i })).toBeNull()
-      expect(screen.queryByRole('button', { name: /logs/i })).toBeNull()
-      expect(screen.queryByRole('button', { name: /close/i })).toBeNull()
-    } finally {
-      restore()
-    }
-  })
+    render(<BootFailureOverlay />)
 
-  it('shows the recovery steps for any other startup failure', async () => {
-    const restore = stubDesktop({ mode: 'local' })
+    expect(screen.queryByRole('dialog', { name: /Hermes couldn't start/i })).toBeNull()
 
-    try {
-      render(<StartupOverlay />)
-      expect(await screen.findByText(en.boot.failure.title)).toBeTruthy()
-      expect(screen.queryByText(en.boot.failure.webappTitle)).toBeNull()
-    } finally {
-      restore()
-    }
+    // The install hands off (or reports its own failure): the recovery surface
+    // is there for whatever comes next.
+    $firstRunInstallActive.set(false)
+
+    render(<BootFailureOverlay />)
+    expect(screen.getByRole('dialog', { name: /Hermes couldn't start/i })).toBeTruthy()
   })
 
   it('shows the Nous Cloud down recovery when the backend flags isCloudBackendDown', async () => {

@@ -123,6 +123,13 @@ def _lift_common_custom_fields(entry: dict[str, Any], result: dict[str, Any], *,
         result["api_mode"] = api_mode
 
     _lift_model_capabilities(entry, None, result)
+    # Per-endpoint reasoning vocabulary. A named custom endpoint's accepted levels are not
+    # discoverable (the custom profile otherwise assumes the widest OpenAI-compat set), so an
+    # operator can declare them and the clamp happens before the request instead of after a 400
+    # ("`reasoning_effort` must be one of `low`, `medium`, or `high`").
+    efforts = entry.get("reasoning_efforts") or entry.get("supported_reasoning_efforts")
+    if isinstance(efforts, (list, tuple)) and efforts:
+        result["reasoning_efforts"] = [str(e).strip().lower() for e in efforts if str(e).strip()]
 
 
 # ── config lookup ──────────────────────────────────────────────────────────────────────────

@@ -7,28 +7,7 @@ import {
   useRef,
 } from "react";
 import { useNavigate } from "react-router";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  Database,
-  ListFilter,
-  Search,
-  Trash2,
-  Clock,
-  Terminal,
-  Globe,
-  X,
-  Play,
-  Eraser,
-  Download,
-  Upload,
-  Pencil,
-  Check,
-  Archive,
-} from "lucide-react";
+import { IconAlertTriangle as AlertTriangle, IconCircleCheck as CheckCircle2, IconChevronDown as ChevronDown, IconChevronLeft as ChevronLeft, IconChevronRight as ChevronRight, IconDatabase as Database, IconFilters as ListFilter, IconMessage as MessageSquare, IconSearch as Search, IconTrash as Trash2, IconClock as Clock, IconTerminal2 as Terminal, IconWorld as Globe, IconMessageCircle as MessageCircle, IconHash as Hash, IconX as X, IconPlayerPlay as Play, IconEraser as Eraser, IconDownload as Download, IconUpload as Upload, IconPencil as Pencil, IconCheck as Check, IconArchive as Archive } from "@tabler/icons-react";
 import { api } from "@/lib/api";
 import { formatSessionPruneResult } from "@/lib/session-prune";
 import { shouldRefreshSessions } from "@/lib/session-refresh";

@@ -1,34 +1,6 @@
 import { useEffect, useLayoutEffect, useState, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router";
-import {
-  Package,
-  Search,
-  Wrench,
-  X,
-  Cpu,
-  Globe,
-  Shield,
-  ShieldCheck,
-  ShieldAlert,
-  ShieldQuestion,
-  Eye,
-  Paintbrush,
-  Brain,
-  Blocks,
-  Code,
-  Zap,
-  Filter,
-  Download,
-  RefreshCw,
-  FileText,
-  ExternalLink,
-  CheckCircle2,
-  AlertTriangle,
-  Sparkles,
-  Loader2,
-  Pencil,
-  Plus,
-} from "lucide-react";
+import { IconPackage as Package, IconSearch as Search, IconTool as Wrench, IconX as X, IconCpu as Cpu, IconWorld as Globe, IconShield as Shield, IconShieldCheck as ShieldCheck, IconShieldExclamation as ShieldAlert, IconShieldQuestion as ShieldQuestion, IconEye as Eye, IconPaint as Paintbrush, IconBrain as Brain, IconBoxMultiple as Blocks, IconCode as Code, IconBolt as Zap, IconFilter as Filter, IconDownload as Download, IconRefresh as RefreshCw, IconFileText as FileText, IconExternalLink as ExternalLink, IconCircleCheck as CheckCircle2, IconAlertTriangle as AlertTriangle, IconSparkles as Sparkles, IconLoader2 as Loader2, IconPencil as Pencil, IconPlus as Plus } from "@tabler/icons-react";
 import { api } from "@/lib/api";
 import type {
   SkillInfo,

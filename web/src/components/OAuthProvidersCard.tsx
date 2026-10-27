@@ -1,11 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import {
-  ShieldCheck,
-  ShieldOff,
-  ExternalLink,
-  RefreshCw,
-  Terminal,
-} from "lucide-react";
+import { IconShieldCheck as ShieldCheck, IconShieldOff as ShieldOff, IconExternalLink as ExternalLink, IconRefresh as RefreshCw, IconTerminal2 as Terminal } from "@tabler/icons-react";
 import { api, type OAuthProvider } from "@/lib/api";
 import { Button } from "@nous-research/ui/ui/components/button";
 import { CopyButton } from "@nous-research/ui/ui/components/command-block";
@@ -60,10 +54,11 @@ export function OAuthProvidersCard({ onError, onSuccess }: Props) {
   const { t } = useI18n();
 
   const onErrorRef = useRef(onError);
-  onErrorRef.current = onError;
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
 
   const refresh = useCallback(() => {
-    setLoading(true);
     api
       .getOAuthProviders()
       .then((resp) => setProviders(resp.providers))

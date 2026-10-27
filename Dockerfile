@@ -344,9 +344,66 @@ RUN cd plugins/platforms/photon/sidecar && \
     npm ci --no-audit --fetch-retries=5 && \
     npm cache clean --force
 
-# Shared product outputs are independent of application dependency assembly.
-COPY --from=frontend_build /opt/products/tui /opt/hermes/ui-tui
-COPY --from=frontend_build /opt/products/web /opt/hermes/hermes_cli/web_dist
+# ---------- Layer-cached Python dependency install ----------
+# Copy only pyproject.toml + uv.lock so the Python dep resolve + wheel
+# download + native-extension compile layer is cached unless those inputs
+# change.  Before this split the Python install sat after `COPY . .`, so
+# every source-only commit re-did ~4-5 min of dep work on cold builds.
+#
+# README.md is referenced by pyproject.toml's `readme =` field, but it's
+# excluded from the build context by .dockerignore's `*.md`.  uv's build
+# frontend stats the readme path during dep resolution, so we `touch` an
+# empty placeholder — the real README is restored by `COPY . .` below.
+#
+# `uv sync --frozen --no-install-project --extra all --extra messaging --extra otlp`
+# installs the deps reachable through the composite `[all]` extra
+# (handpicked set intended for the production image — excludes `[dev]`),
+# plus gateway messaging adapters that should work in the published image
+# without a first-boot lazy install.  We do NOT use `--all-extras`:
+# that would pull in `[rl]` (atroposlib + tinker + torch + wandb from
+# git), `[yc-bench]` (another git dep), and `[termux-all]` (Android
+# redundancy), none of which belong in the published container.
+#
+# Provider packages (anthropic, bedrock, azure-identity) are included
+# so Docker users can use these providers without requiring runtime
+# lazy-install access to PyPI (often blocked in containerized envs).
+#
+# The [otlp] extra contains the SDK/exporter imported by Hermes when Gateway
+# Health export is enabled. Collector and observability-backend dependencies
+# remain external and are not part of the Hermes production image.
+#
+# Catalog memory plugins (e.g. hindsight, since it left the tree) are not
+# baked in: their pip dependencies install at plugin-install time through
+# tools/lazy_deps.py into HERMES_LAZY_INSTALL_TARGET (the durable /opt/data
+# volume, see below), so they survive container recreates (#38128).
+#
+# The Matrix gateway's deps ([matrix] extra) are baked in because
+# python-olm (transitive via mautrix[encryption]) builds from source on
+# Python/image combinations without usable wheels.  The Docker image is
+# Linux-only, so keeping the native libolm/build-toolchain packages here
+# avoids the cross-platform failures that kept [matrix] out of [all]
+# while still making Matrix work in the published container. Fixes #30399.
+#
+# Google Chat's [google-chat] extra (google-cloud-pubsub + Chat API clients)
+# is baked so hosted/immutable images can enable the adapter without writing
+# the sealed venv. Runtime --install-deps still routes through lazy_deps into
+# HERMES_LAZY_INSTALL_TARGET when the extra is not present.
+#
+# The editable link is created after the source copy below.
+COPY pyproject.toml uv.lock ./
+RUN touch ./README.md
+RUN uv sync --frozen --no-install-project --extra all --extra messaging --extra otlp --extra anthropic --extra bedrock --extra azure-identity --extra matrix --extra google-chat
+
+# ---------- Frontend build (cached independently from Python source) ----------
+# Copy only the frontend source trees first so that Python-only changes don't
+# invalidate the (relatively slow) web + ui-tui build layer.
+COPY web/ web/
+COPY ui-tui/ ui-tui/
+COPY apps/shared/ apps/shared/
+COPY remove-overrides.js ./
+RUN cd ui-tui && node ../remove-overrides.js && cd ..
+RUN cd web && npm install --prefer-offline --no-audit --fetch-retries=5 && npm run build &&     cd ../ui-tui && npm install --prefer-offline --no-audit --fetch-retries=5 && npm run build
+
 # ---------- Bot Screen X socket directory ----------
 # Xvnc would create this itself (/tmp is 1777); pre-creating it keeps ownership
 # deterministic when HERMES_UID is remapped between boots.
@@ -362,12 +419,28 @@ RUN mkdir -p /tmp/hermes-runtime && chmod 0700 /tmp/hermes-runtime
 # the final read-only permissions at copy time so we skip the separate
 # `chmod -R` pass that previously walked ~30k files across the venv +
 # node_modules + source (21s amd64 / 222s arm64 — #49113).  `a+rX,go-w`
-# gives the non-root hermes user read + traverse but no write; root retains
-# write so the build steps below don't need chmod u+w dances.
-COPY --link --chmod=a+rX,go-w . .
+RUN rm -rf ui-tui/node_modules/@hermes
+COPY agent/ agent/
+COPY integrations/ integrations/
+COPY providers/ providers/
+COPY packages/ packages/
+COPY acp_adapter/ acp_adapter/
+COPY cron/ cron/
+COPY gateway/ gateway/
+COPY hermes_platform/ hermes_platform/
+COPY tools/ tools/
+COPY tui_gateway/ tui_gateway/
+COPY hermes_cli/ hermes_cli/
+COPY utils.py ./
+COPY hermes_constants.py ./
+COPY registration_lifecycle.py ./
+COPY hermes_state_ids.py ./
+COPY *.py ./
 
-# The shared assembler binds the prepared environment and frontend products.
-RUN /opt/hermes/.venv/bin/python -m docker.build_agent
+# Final COPY: chmod for non-root user access
+# gives the non-root hermes user read + traverse but no write; root retains
+# write so the build steps below dont need chmod u+w dances.
+COPY --link --chmod=a+rX,go-w . .
 
 # Wire the exec shim and install-method stamp.  Files under /opt/hermes are
 # already root-owned (COPY, dep assembly, npm install all run as root) and
@@ -486,6 +559,8 @@ ENV XDG_RUNTIME_DIR=/tmp/hermes-runtime
 # the opt-out env var (HERMES_DOCKER_EXEC_AS_ROOT=1).
 COPY --chmod=0755 docker/hermes-exec-shim.sh /opt/hermes/bin/hermes
 COPY --chmod=0755 docker/entrypoint-dispatch.sh /opt/hermes/docker/entrypoint-dispatch.sh
+COPY --chmod=0755 docker/main-wrapper.sh /opt/hermes/docker/main-wrapper.sh
+COPY --chmod=0755 docker/stage2-hook.sh /opt/hermes/docker/stage2-hook.sh
 
 # Pre-s6 entrypoint.sh did `source .venv/bin/activate` which exported
 # the venv bin onto PATH; Architecture B's main-wrapper.sh does the
@@ -498,6 +573,8 @@ COPY --chmod=0755 docker/entrypoint-dispatch.sh /opt/hermes/docker/entrypoint-di
 # shim wins PATH resolution. The shim's last act is to exec the venv
 # binary by absolute path, so this PATH ordering is transparent to
 # every other consumer.
+RUN uv pip install --no-cache-dir --no-deps -e "."
+ENV PYTHONPATH="/opt/hermes"
 ENV PATH="/opt/hermes/bin:/opt/hermes/.venv/bin:/opt/data/.local/bin:${PATH}"
 # PM's atomic writer creates private facts for source installs. In the
 # image these are shared, non-secret package metadata, read by UID 10000.

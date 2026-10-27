@@ -17,13 +17,24 @@ from pm.downloader import ProgressFn
 
 logger = logging.getLogger(__name__)
 
-BACKEND_PACKAGES = {
-    "cuda": "llamacpp-cuda",
-    "vulkan": "llamacpp-vulkan",
-    "metal": "llamacpp-metal",
-    "hip": "llamacpp-hip",
-    "cpu": "llamacpp-cpu",
-}
+RELEASE_URL = "https://github.com/ggml-org/llama.cpp/releases/download/{tag}/{asset}"
+
+# Windows CUDA zips ship per CUDA major; the runtime zip must be paired with its cudart zip so
+# end users need no toolkit. 13.3 verified on 13.1 and 13.2 drivers.
+_WIN_CUDA_VERSION = "13.3"
+# arm64 Windows CUDA prebuilts landed upstream (~b1036x) on CUDA 13.4. Tags at or before b10290
+# don't have them; resolution succeeds and the download 404s honestly if a user pins backward.
+_WIN_CUDA_VERSION_ARM64 = "13.4"
+# CUDA 13 removed Maxwell/Pascal/Volta. llama.cpp still publishes a CUDA 12.4 Windows asset that
+# carries sm_61, which is what pre-Turing cards must install instead of the 13.x default.
+_WIN_CUDA_VERSION_PASCAL = "12.4"
+
+
+def default_tag() -> str:
+    """Fallback when the config section is missing entirely; DEFAULT_CONFIG owns the shipped tag."""
+    from hermes_cli.config_defaults import DEFAULT_CONFIG
+
+    return DEFAULT_CONFIG["local_runtime"]["tag"]
 
 
 class BinaryResolutionError(RuntimeError):
@@ -74,18 +85,51 @@ def _candidates(requested: str, gpu_vendor: str | None, target: str) -> tuple[st
     return tuple(dict.fromkeys((preferred, *fallback)))
 
 
-def unavailable_reason(backend: str, target: str | None = None) -> str | None:
-    name = BACKEND_PACKAGES.get(backend)
-    if name is None:
-        return f"unknown backend {backend}"
-    target = target or pm.current_target()
-    reason = pm.get_package(name).missing_reason(target)
-    if reason:
-        return reason
-    lock = pm.Lockfile(pm.paths.lockfile_path())
-    if not lock.version(name) or not lock.artifacts(name, target):
-        return f"{name} is not pinned for {target}"
-    return None
+def resolve_assets(tag: str, backend: str, os_name: str | None = None,
+                   arch: str | None = None) -> AssetPlan:
+    """Compose the asset list for (tag, backend, platform). Raises BinaryResolutionError for pairs
+    the release ships no artifact for; callers fall back down the ladder cuda -> vulkan -> cpu."""
+    host_os, host_arch = _host_os_arch()
+    os_name = os_name or host_os
+    arch = arch or host_arch
+    if os_name == "macos":
+        # macOS tarballs are unified (Metal built in).
+        return AssetPlan(tag, backend, [f"llama-{tag}-bin-macos-{arch}.tar.gz"])
+    if os_name not in _ASSET_TEMPLATES:
+        raise BinaryResolutionError(f"unsupported platform {os_name}-{arch}")
+    if os_name == "ubuntu" and backend == "cuda":
+        # No prebuilt Linux CUDA zips at current tags — Linux CUDA users build from source or
+        # use vulkan; the resolver is honest about it.
+        raise BinaryResolutionError(
+            f"no prebuilt linux CUDA asset at {tag}; use vulkan/cpu or a source build")
+    if os_name == "win" and backend == "vulkan" and arch == "arm64":
+        raise BinaryResolutionError(f"no win-vulkan-arm64 asset at {tag}")
+    label, templates = _ASSET_TEMPLATES[os_name]
+    if backend not in templates:
+        raise BinaryResolutionError(f"unsupported {label} backend {backend}")
+    # release.yml switched both HIP names at b10356 (0666ad2b2b), then
+    # ROCm 7.14 -> 10.0 at b10767 (cff184438e). Keep older explicit pins.
+    if backend == "hip" and tag.startswith("b") and tag[1:].isascii() and tag[1:].isdigit():
+        build = int(tag[1:])
+        if build >= 10356:
+            if arch != "x64":
+                raise BinaryResolutionError(f"no {label} HIP {arch} asset at {tag}")
+            rocm_ver = "10.0" if build >= 10767 else "7.14"
+            extension = "zip" if os_name == "win" else "tar.gz"
+            return AssetPlan(tag, backend, [
+                f"llama-{tag}-bin-{os_name}-rocm-{rocm_ver}-{arch}.{extension}"])
+    # The toolkit version follows the DEVICE, not the newest release: CUDA 13 dropped
+    # Maxwell/Pascal/Volta, so a pre-Turing card handed the 13.x asset installs cleanly,
+    # verifies, and then fails on the first inference. Falls back to the 13.x default when the
+    # capability can't be read, so a probe miss never silently downgrades a modern card.
+    cuda_ver = _WIN_CUDA_VERSION_ARM64 if arch == "arm64" else _WIN_CUDA_VERSION
+    if os_name == "win" and backend == "cuda" and arch != "arm64":
+        with suppress(Exception):
+            from hermes_cli.local_runtime.hardware import cuda_version_for_device
+
+            cuda_ver = cuda_version_for_device(cuda_ver)
+    return AssetPlan(tag, backend, [t.format(tag=tag, arch=arch, cuda_ver=cuda_ver)
+                                    for t in templates[backend]])
 
 
 def resolve_backend(requested: str = "auto", *, gpu_vendor: str | None = None,

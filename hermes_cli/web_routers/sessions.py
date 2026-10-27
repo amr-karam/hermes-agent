@@ -843,6 +843,39 @@ async def get_session_messages_around(
     return result
 
 
+@manage_router.get("/api/sessions/{session_id}/preview")
+async def session_preview(
+    session_id: str, limit: int = Query(5, ge=1, le=20), profile: Optional[str] = None,
+):
+    """Last ``limit`` messages for a hover-preview row in the chat session list.
+
+    Reuses the same read path as ``/messages`` (resolve → keyset page → display
+    projection) so a preview never diverges from what the terminal would show.
+    Read-only; ``limit`` is capped at 20 so a row hover cannot drag a huge
+    transcript off disk.
+    """
+
+    def _read(db):
+        sid = _resolve_session_id(db, session_id)
+        if not sid:
+            return None
+        sid = db.resolve_resume_session_id(sid)
+        return sid, db.get_messages(sid, limit=limit, latest=True, include_compacted=False)
+
+    result = await asyncio.to_thread(_with_db, profile, _read, read_only=True)
+    if result is None:
+        raise HTTPException(status_code=404, detail=_NOT_FOUND)
+    sid, messages = result
+    projected = await asyncio.to_thread(
+        _project_for_display, messages, home=_history_profile_home(profile))
+    return {
+        "session_id": sid,
+        "profile": _serving_profile(profile),
+        "messages": projected,
+        "returned": len(projected),
+    }
+
+
 @manage_router.delete("/api/sessions/{session_id}")
 async def delete_session_endpoint(session_id: str, request: Request, profile: Optional[str] = None,
                                   request_id: Optional[str] = None, expected_revision: Optional[int] = None,

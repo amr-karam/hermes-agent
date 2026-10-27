@@ -6,7 +6,7 @@ import logging
 import hashlib
 import fnmatch
 import re
-from typing import Any, List
+from typing import Any, Dict, List, Set
 from tools.ansi_strip import strip_unicode_tags
 from tools.mcp_tool_common import mcp_field
 
@@ -166,7 +166,12 @@ MCP_TOOL_NAME_PREFIX = "mcp__"
 # unaffected because handlers close over the original unprefixed tool name.
 _MCP_TOOL_NAME_MAX_LENGTH = 64
 _MCP_TOOL_NAME_HASH_LENGTH = 8
-_clamped_names_warned: set[str] = set()
+# The clamp is recomputed on every health refresh, so the actionable signal is per-SERVER, not
+# per-name: one server (Cloudflare) can clamp ~200 generated names, and warning per name buried the
+# real MCP failures in the log. Distinct clamped names are accumulated per server and summarised
+# once per process; the per-name detail stays at DEBUG.
+_clamped_names_by_server: Dict[str, Set[str]] = {}
+_clamped_summary_logged: Set[str] = set()
 
 
 def mcp_prefixed_tool_name(server_name: str, tool_name: str) -> str:
@@ -176,11 +181,26 @@ def mcp_prefixed_tool_name(server_name: str, tool_name: str) -> str:
     if len(full_name) <= _MCP_TOOL_NAME_MAX_LENGTH:
         return full_name
     suffix = "_" + hashlib.sha256(full_name.encode("utf-8")).hexdigest()[:_MCP_TOOL_NAME_HASH_LENGTH]
-    if full_name not in _clamped_names_warned:  # recomputed on every health refresh; warn once
-        _clamped_names_warned.add(full_name)
-        logger.warning("MCP tool name %r (%d chars) exceeds the %d-char provider limit; shortened to a "
-                       "deterministic hash-suffixed name", full_name, len(full_name), _MCP_TOOL_NAME_MAX_LENGTH)
+    clamped = _clamped_names_by_server.setdefault(server_name, set())
+    if full_name not in clamped:
+        clamped.add(full_name)
+        logger.debug("MCP tool name %r (%d chars) exceeds the %d-char provider limit; shortened to a "
+                     "deterministic hash-suffixed name", full_name, len(full_name), _MCP_TOOL_NAME_MAX_LENGTH)
     return full_name[:_MCP_TOOL_NAME_MAX_LENGTH - len(suffix)] + suffix
+
+
+def log_clamped_name_summary(server_name: str) -> None:
+    """Emit at most one WARNING per server per process summarising how many of its tool names needed
+    the 64-char clamp. Called at the end of a registration batch (``_tool_candidates``); without it
+    the per-name DEBUG lines are the only trace and an over-long server looks like a healthy one."""
+    clamped = _clamped_names_by_server.get(server_name)
+    if not clamped or server_name in _clamped_summary_logged:
+        return
+    _clamped_summary_logged.add(server_name)
+    longest = max(clamped, key=len)
+    logger.warning("MCP server '%s': %d tool name(s) exceeded the %d-char provider limit and were shortened "
+                   "with a deterministic hash suffix (longest: %r, %d chars)", server_name, len(clamped),
+                   _MCP_TOOL_NAME_MAX_LENGTH, longest, len(longest))
 
 
 def _convert_mcp_schema(server_name: str, mcp_tool) -> dict:
