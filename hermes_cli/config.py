@@ -523,7 +523,7 @@ def require_parseable_user_config(*, ignore_user_config: bool = False) -> None:
         "`hermes config check`, or add --ignore-user-config to run once with default settings.")
     if backup_path is not None:
         message += f" A copy of the broken file is at {backup_path}."
-    message += f" Details: {_lazy("_yaml_error_details")(parse_error)}"
+    message += f" Details: {_lazy('_yaml_error_details')(parse_error)}"
     logger.error(message)
     raise InvalidUserConfigError(message) from parse_error
 
