@@ -349,8 +349,10 @@ from hermes_cli.subcommands.gateway import build_gateway_parser
 from hermes_cli.subcommands.profile import build_profile_parser
 from hermes_cli.subcommands.model import build_model_parser
 from hermes_cli.subcommands.setup import build_setup_parser
-from hermes_cli.subcommands.rig import build_rig_parser
-from hermes_cli.subcommands.rig import build_rig_parser
+try:
+    from hermes_cli.subcommands.rig import build_rig_parser
+except ImportError:
+    build_rig_parser = None
 
 from hermes_cli.subcommands.whatsapp import build_whatsapp_parser, build_whatsapp_cloud_parser
 from hermes_cli.subcommands.slack import build_slack_parser
@@ -3362,7 +3364,8 @@ def _build_cli_parser():
     build_skills_parser(subparsers, cmd_skills=cmd_skills)
     build_bundles_parser(subparsers)
     build_plugins_parser(subparsers, cmd_plugins=cmd_plugins)
-    build_rig_parser(subparsers)
+    if build_rig_parser is not None:
+        build_rig_parser(subparsers)
 
     _register_plugin_cli_commands(subparsers)
 
