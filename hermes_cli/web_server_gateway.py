@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from hermes_cli._subprocess_compat import windows_detach_flags, windows_detach_flags_without_breakaway
 from hermes_cli.config import get_hermes_home
+from hermes_cli.env_loader import load_hermes_dotenv
+load_hermes_dotenv()
 
 # Same logger the code used before extraction (record parity).
 _log = logging.getLogger("hermes_cli.web_server")
@@ -534,9 +536,9 @@ def _spawn_hermes_action(
                 # retry without it so the action still spawns, and record why for the status route.
                 if getattr(exc, "winerror", None) != 5:
                     raise
-                log_file.write(
-                    f"{name}: breakaway spawn refused ({exc}); retrying without CREATE_BREAKAWAY_FROM_JOB\n".encode()
-                )
+                # Breakaway refused by the parent job object (e.g. an Electron/Tauri-
+                # launched dashboard). Retry silently without the bit so the action
+                # still spawns; the retry is expected in those environments.
                 proc = _popen(creationflags=windows_detach_flags_without_breakaway())
         else:
             proc = _popen(start_new_session=True)

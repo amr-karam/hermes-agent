@@ -420,6 +420,16 @@ async def handle_ws(ws: Any, *, auth_identity: dict | None = None, subprotocol: 
     """Run one WebSocket session. Wire-compatible with ``tui_gateway.entry``. *auth_identity* is the server-minted
     ``{user_id, provider}`` recorded at WS-upgrade auth, stored as ``WSTransport.auth_identity`` (the only identity
     authority for session ownership and relay authorship); callers that omit it (harnesses, embedded TUI child) get None."""
+    # Collapse the peer-hangup teardown flood (#50005): 50+ identical WinError
+    # 10054 tracebacks per WebSocket disconnect become one debug line. Idempotent,
+    # so repeated per-connection installs are harmless.
+    try:
+        from tui_gateway.loop_noise import install_loop_noise_filter
+
+        install_loop_noise_filter(asyncio.get_running_loop())
+    except Exception:  # pragma: no cover - best-effort; never break a connection
+        pass
+
     peer, transport = _ws_peer_label(ws), None
     authority_connection = None
     messages = parse_errors = dispatch_crashes = send_failures = 0
