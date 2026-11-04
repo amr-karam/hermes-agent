@@ -362,6 +362,62 @@ class MCPServerTransportMixin:
                     _stdio_starttimes.pop(pid, None)
         _core._update_death_supervisor("unregister", released_pgids)
 
+    # ------------------------------------------------------------------ stdout banner filter
+
+    class _StdoutBannerFilter:
+        """Wrap an MCP stdio read stream so non-JSON banner lines never reach the JSONRPC parser.
+
+        MCP stdio servers sometimes print startup banners (e.g. dotenvx/vestauth's
+        ``◇ injected env (0) ...``) to stdout. With mcp 1.28.1 the SDK's
+        ``stdio_client`` already parses each stdout line in ``stdout_reader`` via
+        ``JSONRPCMessage.model_validate_json(line)``: valid lines are sent as
+        ``SessionMessage`` objects, non-JSON lines (banners) are sent as ``Exception``
+        objects (already logged by the SDK). ``ClientSession``'s read loop accesses
+        ``message.message.root`` on every stream item, so an ``Exception`` slipping
+        through raises ``AttributeError`` and kills the session. This wrapper lets only
+        ``SessionMessage`` items through and drops ``Exception``/banner items, stamping
+        them into the shared MCP stderr log instead. Applies to *all* MCP stdio servers,
+        not just dotenvx/vestauth.
+        """
+
+        def __init__(self, read_stream, stderr_log_fh):
+            self._read_stream = read_stream
+            self._stderr_log_fh = stderr_log_fh
+
+        async def receive(self):
+            while True:
+                item = await self._read_stream.receive()
+                if self._is_json(item):
+                    return item
+                self._drop_banner(item)
+
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            return await self.receive()
+
+        @staticmethod
+        def _is_json(item) -> bool:
+            # mcp 1.28.1 stream shape: read_stream yields SessionMessage | Exception.
+            # SessionMessage == valid JSON (parse succeeded); Exception == banner /
+            # parse failure (already logged by the SDK's stdout_reader). Only
+            # SessionMessage is valid JSONRPC for ClientSession.
+            from mcp.shared.message import SessionMessage
+
+            return isinstance(item, SessionMessage)
+
+        def _drop_banner(self, item) -> None:
+            try:
+                self._stderr_log_fh.write(
+                    f"MCP server stdout banner (non-JSON, dropped): {str(item).rstrip()}\n")
+                self._stderr_log_fh.flush()
+            except (OSError, ValueError):
+                pass  # log closed at shutdown: keep draining the child
+
+        def __getattr__(self, name):
+            return getattr(self._read_stream, name)
+
     async def _run_stdio(self, config: dict):
         """Run the server using stdio transport."""
         if config.get("identity_header") is not None:  # copy-pasted HTTP block: warn, don't mislead
@@ -412,6 +468,9 @@ class MCPServerTransportMixin:
         stderr = _config._StderrTee(_config._get_mcp_stderr_log())
         try:
             async with _core.stdio_client(server_params, errlog=stderr.sink) as (read_stream, write_stream):
+                # Drop non-JSON stdout banners (dotenvx/vestauth and any other server) before they
+                # reach the JSONRPC parser — log them to the shared MCP stderr log instead.
+                read_stream = self._StdoutBannerFilter(read_stream, stderr._log)
                 # New PIDs for force-kill cleanup, minus non-MCP children (slash_worker, LSP) racing
                 # into the window: they share the TUI's pgid — leaking them would killpg() the TUI.
                 new_pids = _filter_mcp_children(_lifecycle._snapshot_child_pids() - pids_before)
