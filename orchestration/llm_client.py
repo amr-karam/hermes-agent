@@ -4,6 +4,10 @@ The Rig plans with a model only when one is configured (``$HERMES_RIG_MODEL``)
 or explicitly required (``$HERMES_RIG_REQUIRE_MODEL``); otherwise slicing is
 deterministic and no client is consulted, so a model outage never takes the
 default path down.
+
+A free-model transport (OpenRouter free-tier rotation with model cooldown) is
+available in :mod:`orchestration.free_llm` and can be injected here as the
+``transport`` callable — it is intentionally not a hard dependency.
 """
 
 from __future__ import annotations

@@ -1,15 +1,22 @@
 """RigController: seat lifecycle (tmux) and mission execution over the workspace.
 
-Seats are tmux sessions named ``hermes-{seat}``. Every tmux interaction degrades
-gracefully: when tmux is missing or unusable, ``up``/``down`` print a warning
-and continue, ``ps`` reports seats inactive, and ``_session_exists`` is ``False``.
+Merged interface:
 
-``run`` plans (slices) a goal and executes what the risk gate allows: safe
-slices run to completion, risk-gated slices pause for ``hermes rig approve``,
-and a plan with nothing executable escalates to a human with
-``status == "escalated"``. The model path (``$HERMES_RIG_MODEL`` /
-``$HERMES_RIG_REQUIRE_MODEL``) is the only place ``LLMUnavailableError`` /
-``LLMOutputError`` can surface; the default plan is deterministic.
+* Keeps local's clean contract used by ``hermes_cli.subcommands.rig`` and
+  ``hermes_cli.web_routers.rig``: ``RigController(root, proj, read_only=False)``
+  with ``.wm``, ``up()``, ``ps()``, ``down()``, ``run(request, ...) -> dict``
+  and ``run_async(task) -> dict``.
+* Adds server's OpenRig enhancements as optional layers:
+  - Optional free-model LLM transport (``$HERMES_RIG_MODEL`` /
+    ``$HERMES_RIG_REQUIRE_MODEL`` or an injected transport) for model-backed
+    planning; deterministic slicing remains the default so a model outage never
+    blocks the default path.
+  - Per-slice risk gating via ``is_risky`` / ``approved`` from the workspace.
+  - Optional per-slice artifact recording after execution.
+  - Seat lifecycle degrades gracefully when tmux is missing (prints a warning,
+    continues without crashing).
+
+Seats are tmux sessions named ``hermes-{seat}``.
 """
 
 from __future__ import annotations
@@ -197,7 +204,6 @@ class RigController:
                 for entry in self.wm.get_active_slices(mission["id"]):
                     rows.append((mission["id"], entry))
             except (ValueError, FileNotFoundError):
-                # A malformed mission on disk must not take `ps` down.
                 continue
         if not rows:
             print("\nNo active slices.")
@@ -320,14 +326,19 @@ class RigController:
                 mission_id,
                 f"RESULT {entry['id']} completed: {entry.get('title') or ''}",
             )
-            tasks.append(
-                {
-                    "agent": entry.get("owner"),
-                    "slice_id": entry["id"],
-                    "title": entry.get("title"),
-                    "status": "completed",
-                }
-            )
+            task_entry: dict = {
+                "agent": entry.get("owner"),
+                "slice_id": entry["id"],
+                "title": entry.get("title"),
+                "status": "completed",
+            }
+            # OpenRig enhancement: record per-slice artifact when a spec exists.
+            spec = entry.get("spec")
+            if spec:
+                self.wm.record_artifact(
+                    mission_id, entry["id"], f"# Slice {entry['id']}\n\n{spec}\n"
+                )
+            tasks.append(task_entry)
         return tasks
 
     def _escalate(self, mission_id: str, goal: str, tier: dict, reason: str) -> dict:
