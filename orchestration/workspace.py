@@ -402,6 +402,9 @@ class WorkspaceManager:
         }
         slices.append(entry)
         self._save_slices(mission_id, slices)
+        # Create the slice directory on disk so per-slice artifacts (e.g.
+        # artifact.diff via record_artifact) have a place to live.
+        self._slice_dir(mission_id, slice_id).mkdir(parents=True, exist_ok=True)
         self.append_log(mission_id, f"SLICE_ADDED {slice_id}: {entry['title']}")
 
     def is_approved(self, mission_id: str, slice_id: str) -> bool:
